@@ -16,28 +16,42 @@ export interface TrackPoint extends Vec2 {
 export const TRACK_LENGTH_M = 1400
 export const TRACK_WIDTH_M = 11
 
-// Puntos de control (metros, y hacia abajo). La largada es el primer punto,
-// sentido horario visto en pantalla.
-const CONTROL_POINTS: Vec2[] = [
-  { x: -30, y: 0 },
-  { x: 200, y: 0 },
-  { x: 265, y: 22 },
-  { x: 292, y: 85 },
-  { x: 250, y: 135 },
-  { x: 180, y: 135 },
-  { x: 148, y: 195 },
-  { x: 200, y: 250 },
-  { x: 280, y: 242 },
-  { x: 332, y: 292 },
-  { x: 292, y: 352 },
-  { x: 180, y: 362 },
-  { x: 40, y: 342 },
-  { x: -80, y: 302 },
-  { x: -182, y: 252 },
-  { x: -224, y: 160 },
-  { x: -196, y: 58 },
-  { x: -150, y: 0 },
+// Puntos de control calcados de la imagen satelital (píxeles de la captura,
+// origen arriba a la izquierda; ~0,47 m por píxel). El trazado se escala
+// después para que el desarrollo total sea de 1400 m. Sentido horario visto
+// desde arriba: la largada está en la recta del este, bajando hacia el sur.
+const SAT_PX_PER_M = 1 / 0.47
+const SAT_CENTER = { x: 550, y: 850 }
+const SAT_POINTS: Vec2[] = [
+  { x: 820, y: 760 }, // largada
+  { x: 885, y: 990 },
+  { x: 870, y: 1150 },
+  { x: 790, y: 1270 },
+  { x: 640, y: 1350 },
+  { x: 450, y: 1390 },
+  { x: 290, y: 1350 },
+  { x: 185, y: 1230 },
+  { x: 170, y: 1100 },
+  { x: 215, y: 1000 },
+  { x: 290, y: 910 },
+  { x: 370, y: 860 },
+  { x: 480, y: 850 },
+  { x: 590, y: 858 },
+  { x: 645, y: 830 },
+  { x: 625, y: 730 },
+  { x: 570, y: 620 },
+  { x: 510, y: 500 },
+  { x: 500, y: 400 },
+  { x: 545, y: 320 },
+  { x: 630, y: 320 },
+  { x: 690, y: 400 },
+  { x: 715, y: 500 },
+  { x: 760, y: 610 },
 ]
+const CONTROL_POINTS: Vec2[] = SAT_POINTS.map((p) => ({
+  x: (p.x - SAT_CENTER.x) / SAT_PX_PER_M,
+  y: (p.y - SAT_CENTER.y) / SAT_PX_PER_M,
+}))
 
 function catmullRom(p0: Vec2, p1: Vec2, p2: Vec2, p3: Vec2, t: number): Vec2 {
   const t2 = t * t
@@ -144,7 +158,7 @@ export class Track {
       maxX = Math.max(maxX, p.x)
       maxY = Math.max(maxY, p.y)
     }
-    const pad = 120
+    const pad = 60
     this.bounds = { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad }
 
     for (let i = 0; i < n; i++) {
