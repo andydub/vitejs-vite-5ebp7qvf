@@ -1,69 +1,48 @@
-# React + TypeScript + Vite
+# Sport 4 · Autódromo Víctor García
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Juego de carreras 3D en el navegador, ambientado en el Autódromo Municipal
+"Víctor García" de General Alvear (Mendoza) con autos de la categoría Sport 4
+de las Categorías Tradicionales: prototipos de tierra con motor de 4 cilindros,
+ruedas delanteras descubiertas y jaula antivuelco.
 
-Currently, two official plugins are available:
+Hecho con React, TypeScript, Vite y Three.js. Sin modelos ni texturas
+externas: la pista, los autos, el ambiente y el sonido del motor se generan
+por código.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Correrlo
 
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default tseslint.config([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      ...tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      ...tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      ...tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Abrir la URL que muestra Vite (por defecto http://localhost:5173).
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Controles
 
-export default tseslint.config([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+| Acción            | Teclado                 | Celular             |
+| ----------------- | ----------------------- | ------------------- |
+| Acelerar          | ↑ o W                   | botón GAS           |
+| Frenar            | ↓, S o Espacio          | botón FRENO         |
+| Doblar            | ← → o A D               | botones ◀ ▶         |
+| Volver a la pista | R                       | botón "A pista"     |
+| Cambiar cámara    | C (persecución / lejana / capot) | botón "Cámara" |
+
+## Estructura
+
+- `src/game/track.ts`: trazado (puntos de control suavizados con Catmull-Rom,
+  escalados a 1400 m), búsqueda de punto más cercano, curvatura.
+- `src/game/car.ts`: física arcade con derrape sobre tierra, conteo de
+  vueltas y colisiones entre autos.
+- `src/game/ai.ts`: pilotos rivales que siguen la línea central y regulan la
+  velocidad según la curvatura que viene.
+- `src/game/race.ts`: grilla, largada, clasificación y fin de carrera.
+- `src/game/scene3d.ts`: escena Three.js (pista de tierra, cubiertas,
+  alambrado, tribuna, torre, álamos, cordillera, autos, polvo, cámaras).
+- `src/game/audio.ts`: motor sintetizado con Web Audio.
+- `src/App.tsx`: menú, HUD, minimapa y resultados.
+
+## Pendiente
+
+- El trazado es una aproximación: falta ajustarlo al plano real del circuito.
+- Modelos de auto y liveries basados en fotos reales de la categoría.

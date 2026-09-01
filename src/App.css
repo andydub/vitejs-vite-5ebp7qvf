@@ -1,42 +1,252 @@
-#root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
+.game {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: #4f7a3b;
+  touch-action: none;
+  user-select: none;
+}
+.game canvas {
+  display: block;
+}
+
+.minimap {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  pointer-events: none;
+}
+
+.hud {
+  position: absolute;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
+  pointer-events: none;
+}
+.hud.top-left {
+  top: 16px;
+  left: 16px;
+  background: rgba(0, 0, 0, 0.45);
+  padding: 12px 16px;
+  border-radius: 10px;
+  min-width: 160px;
+}
+.hud .pos {
+  font-size: 34px;
+  font-weight: 800;
+  line-height: 1;
+}
+.hud .pos span,
+.hud .lap span {
+  font-size: 0.55em;
+  opacity: 0.7;
+}
+.hud .lap {
+  font-size: 18px;
+  font-weight: 600;
+  margin-top: 6px;
+}
+.hud .times {
+  margin-top: 8px;
+  font-size: 13px;
+  opacity: 0.9;
+}
+.hud .times b {
+  margin-left: 6px;
+}
+.hud.speed {
+  right: 16px;
+  bottom: 16px;
+  font-size: 18px;
+  text-align: right;
+}
+.hud.speed b {
+  font-size: 44px;
+  font-weight: 800;
+}
+.hud .warn {
+  color: #ffb1a8;
+  font-weight: 700;
+}
+
+.countdown {
+  position: absolute;
+  top: 30%;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 96px;
+  font-weight: 900;
+  color: #fff;
+  text-shadow: 0 4px 16px rgba(0, 0, 0, 0.7);
+  pointer-events: none;
+}
+.countdown.go {
+  color: #7cff7c;
+}
+
+.touch {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: none;
+  justify-content: space-between;
+  padding: 16px;
+  gap: 16px;
+}
+@media (pointer: coarse) {
+  .touch {
+    display: flex;
+  }
+  .hud.speed {
+    bottom: 120px;
+  }
+}
+.touch .group {
+  display: flex;
+  gap: 12px;
+}
+.touch button {
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.6);
+  background: rgba(0, 0, 0, 0.4);
+  color: #fff;
+  font-size: 20px;
+  font-weight: 800;
+  touch-action: none;
+}
+.touch button.gas {
+  background: rgba(60, 180, 60, 0.6);
+}
+.touch button.brake {
+  background: rgba(200, 50, 50, 0.6);
+}
+
+.topbar {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+}
+.quit {
+  background: rgba(0, 0, 0, 0.4);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+.menu {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: radial-gradient(circle at 30% 20%, #2f3f5e, #101522 70%);
+}
+.menu-card {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  padding: 32px 36px;
+  max-width: 560px;
+  width: 100%;
+  color: #fff;
   text-align: center;
 }
-
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
+.eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 12px;
+  color: #ffd500;
+  margin: 0 0 8px;
 }
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
+.menu-card h1 {
+  font-size: 56px;
+  margin: 0;
+  line-height: 1;
 }
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
+.menu-card h2 {
+  font-size: 20px;
+  font-weight: 500;
+  margin: 8px 0 4px;
 }
-
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+.muted {
+  opacity: 0.6;
+  margin: 0 0 24px;
 }
-
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
+.menu-card label {
+  display: block;
+  margin: 0 0 24px;
+  font-size: 14px;
+  opacity: 0.9;
 }
-
-.card {
-  padding: 2em;
+.laps {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 8px;
 }
-
-.read-the-docs {
-  color: #888;
+.menu-card button {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  padding: 10px 18px;
+  font-size: 16px;
+  cursor: pointer;
+}
+.menu-card button.active {
+  background: #ffd500;
+  color: #000;
+  border-color: #ffd500;
+}
+.menu-card button.primary {
+  background: #ffd500;
+  color: #000;
+  font-weight: 800;
+  font-size: 20px;
+  padding: 14px 40px;
+  border-color: #ffd500;
+}
+.help {
+  font-size: 13px;
+  opacity: 0.6;
+  margin: 20px 0 0;
+}
+.results table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0 24px;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.results th,
+.results td {
+  padding: 8px 6px;
+  text-align: left;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+.results tr.me {
+  background: rgba(255, 213, 0, 0.15);
+  font-weight: 700;
+}
+.swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  margin-right: 6px;
+}
+.row {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
 }
