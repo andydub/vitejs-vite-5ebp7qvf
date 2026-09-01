@@ -8,7 +8,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js'
 import { Lensflare, LensflareElement } from 'three/addons/objects/Lensflare.js'
 import { CAR_SPEC, type Car } from './car'
 import { Track } from './track'
-import { applyHueShift, loadCarModel } from './models'
+import { applyHueShift, loadCarModel, WHEEL_NAMES } from './models'
 
 // Convención: el mundo del juego es (x, y) en planta; en Three.js va a (x, 0, y).
 // Un rumbo θ (cos θ, sin θ) equivale a rotation.y = -θ con el auto mirando +X.
@@ -340,6 +340,30 @@ function makeSideTexture(num: number, team: string, color: string, stripe: strin
   return canvasTexture(canvas, false)
 }
 
+/** Cartel de sponsor o pancarta: fondo de color y texto grande. */
+function makeBannerTexture(text: string, bg: string, fg: string, w = 1024, h = 192): THREE.CanvasTexture {
+  const c = document.createElement('canvas')
+  c.width = w
+  c.height = h
+  const ctx = c.getContext('2d')!
+  ctx.fillStyle = bg
+  ctx.fillRect(0, 0, w, h)
+  ctx.strokeStyle = fg
+  ctx.lineWidth = 10
+  ctx.strokeRect(14, 14, w - 28, h - 28)
+  ctx.fillStyle = fg
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  let size = h * 0.55
+  ctx.font = `bold ${size}px sans-serif`
+  while (ctx.measureText(text).width > w * 0.85 && size > 20) {
+    size -= 4
+    ctx.font = `bold ${size}px sans-serif`
+  }
+  ctx.fillText(text, w / 2, h / 2 + 4)
+  return canvasTexture(c, false)
+}
+
 /** Rejilla del radiador. */
 function makeGrilleTexture(): THREE.CanvasTexture {
   const c = document.createElement('canvas')
@@ -388,6 +412,7 @@ interface CarView {
   dustNext: number
   markDist: number
   markIndex: number
+  modelWheels: { pivot: THREE.Object3D; mesh: THREE.Object3D; front: boolean; radius: number }[]
 }
 
 /**
@@ -653,7 +678,7 @@ function buildCar(car: Car): CarView {
     wheels.push(rear)
   }
 
-  return { group, body, frontWheels, wheels, dust: [], dustAge: [], dustNext: 0, markDist: 0, markIndex: 0 }
+  return { group, body, frontWheels, wheels, dust: [], dustAge: [], dustNext: 0, markDist: 0, markIndex: 0, modelWheels: [] }
 }
 
 // ---------------------------------------------------------------------------
@@ -694,6 +719,7 @@ export class Scene3D {
   private tmpPos = new THREE.Vector3()
   private composer!: EffectComposer
   private bloom!: UnrealBloomPass
+  private grade!: ShaderPass
   private smoke: THREE.Sprite[] = []
   private flags: THREE.Mesh[] = []
   private time = 0
@@ -705,11 +731,11 @@ export class Scene3D {
     this.renderer.shadowMap.enabled = true
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping
-    this.renderer.toneMappingExposure = 0.85
+    this.renderer.toneMappingExposure = 0.95
     this.renderer.outputColorSpace = THREE.SRGBColorSpace
 
     this.camera = new THREE.PerspectiveCamera(62, 1, 0.5, 4000)
-    this.scene.fog = new THREE.Fog(0xd9dfe3, 350, 2600)
+    this.scene.fog = new THREE.Fog(0xe6d6bf, 220, 2000)
 
     this.center = new THREE.Vector2((track.bounds.minX + track.bounds.maxX) / 2, (track.bounds.minY + track.bounds.maxY) / 2)
     // Paddock: explanada afuera de la recta principal.
@@ -761,6 +787,13 @@ export class Scene3D {
         for (const fw of view.frontWheels) fw.visible = false
         for (const w of view.wheels) w.visible = false
         view.group.add(model)
+        view.modelWheels = []
+        for (const name of WHEEL_NAMES) {
+          const pivot = model.getObjectByName(name)
+          if (pivot && pivot.children[0]) {
+            view.modelWheels.push({ pivot, mesh: pivot.children[0], front: name.includes('_f_'), radius: (pivot.userData.radius as number) || 0.4 })
+          }
+        }
       })
       .catch((err: unknown) => {
         console.warn('No se pudo cargar el modelo del auto', cfg.url, err)
@@ -771,24 +804,37 @@ export class Scene3D {
   private buildPostProcessing() {
     this.composer = new EffectComposer(this.renderer)
     this.composer.addPass(new RenderPass(this.scene, this.camera))
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.22, 0.6, 0.85)
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.3, 0.7, 0.8)
     this.composer.addPass(this.bloom)
-    const grade = new ShaderPass({
-      uniforms: { tDiffuse: { value: null }, strength: { value: 0.55 } },
+    // Gradación cinematográfica: sombras frías, luces cálidas, contraste
+    // suave, viñeta y un grano de película muy leve.
+    this.grade = new ShaderPass({
+      uniforms: { tDiffuse: { value: null }, strength: { value: 0.6 }, time: { value: 0 } },
       vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-      fragmentShader: `uniform sampler2D tDiffuse; uniform float strength; varying vec2 vUv;
+      fragmentShader: `uniform sampler2D tDiffuse; uniform float strength; uniform float time; varying vec2 vUv;
+        float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233)) + time) * 43758.5453); }
         void main(){
           vec4 c = texture2D(tDiffuse, vUv);
+          vec3 col = c.rgb;
+          float l = dot(col, vec3(0.299, 0.587, 0.114));
+          // Separación tonal: sombras hacia azul, luces hacia ámbar.
+          float t = smoothstep(0.05, 0.9, l);
+          vec3 shadowTint = vec3(0.90, 0.96, 1.10);
+          vec3 highTint = vec3(1.08, 1.00, 0.90);
+          col *= mix(shadowTint, highTint, t);
+          // Contraste suave y saturación.
+          col = (col - 0.18) * 1.08 + 0.18;
+          l = dot(col, vec3(0.299, 0.587, 0.114));
+          col = mix(vec3(l), col, 1.18);
           // Viñeta.
-          vec2 d = vUv - 0.5; float v = 1.0 - smoothstep(0.35, 0.95, length(d) * 1.35) * strength;
-          // Un poco más de saturación y calidez de tarde.
-          float l = dot(c.rgb, vec3(0.299, 0.587, 0.114));
-          vec3 sat = mix(vec3(l), c.rgb, 1.12);
-          sat *= vec3(1.03, 1.0, 0.96);
-          gl_FragColor = vec4(sat * v, c.a);
+          vec2 d = vUv - 0.5; float v = 1.0 - smoothstep(0.3, 0.95, length(d) * 1.4) * strength;
+          col *= v;
+          // Grano.
+          col += (hash(vUv * 1000.0) - 0.5) * 0.02;
+          gl_FragColor = vec4(max(col, 0.0), c.a);
         }`,
     })
-    this.composer.addPass(grade)
+    this.composer.addPass(this.grade)
     this.composer.addPass(new OutputPass())
     this.composer.addPass(new SMAAPass())
   }
@@ -800,9 +846,9 @@ export class Scene3D {
       depthWrite: false,
       fog: false,
       uniforms: {
-        top: { value: new THREE.Color(0x4f8fd0) },
-        mid: { value: new THREE.Color(0x9cc0e2) },
-        horizon: { value: new THREE.Color(0xe4e6e2) },
+        top: { value: new THREE.Color(0x3f78b8) },
+        mid: { value: new THREE.Color(0x9fbfe0) },
+        horizon: { value: new THREE.Color(0xf3dcc0) },
       },
       vertexShader: `varying vec3 vPos; void main(){ vPos = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
       fragmentShader: `uniform vec3 top; uniform vec3 mid; uniform vec3 horizon; varying vec3 vPos;
@@ -836,14 +882,14 @@ export class Scene3D {
     envScene.add(ground)
     const pmrem = new THREE.PMREMGenerator(this.renderer)
     this.scene.environment = pmrem.fromScene(envScene, 0.02, 0.5, 5000).texture
-    this.scene.environmentIntensity = 0.35
+    this.scene.environmentIntensity = 0.3
     pmrem.dispose()
   }
 
   private buildLights() {
-    const hemi = new THREE.HemisphereLight(0xcfe0f5, 0x6a4f36, 0.4)
+    const hemi = new THREE.HemisphereLight(0x9fb8e0, 0x6a4a30, 0.42)
     this.scene.add(hemi)
-    this.sun = new THREE.DirectionalLight(0xffe9c8, 1.9)
+    this.sun = new THREE.DirectionalLight(0xffd9a0, 2.3)
     this.sun.castShadow = true
     this.sun.shadow.mapSize.set(4096, 4096)
     const s = 60
@@ -976,6 +1022,11 @@ export class Scene3D {
     beam.rotation.y = -s0.heading
     beam.castShadow = true
     this.scene.add(beam)
+    const bannerMat = new THREE.MeshStandardMaterial({ map: makeBannerTexture('LARGADA · AUTÓDROMO VÍCTOR GARCÍA', '#ffffff', '#1d3f8f', 2048, 256), side: THREE.DoubleSide, roughness: 0.8 })
+    const banner = new THREE.Mesh(new THREE.PlaneGeometry(t.width + 3, 1.3), bannerMat)
+    banner.position.set(s0.x, 4.9, s0.y)
+    banner.rotation.y = -s0.heading - Math.PI / 2
+    this.scene.add(banner)
 
     // Cubiertas de protección en el exterior de las curvas cerradas.
     const tireGeo = new THREE.TorusGeometry(0.42, 0.18, 8, 14)
@@ -997,8 +1048,12 @@ export class Scene3D {
       }
     }
     if (tirePositions.length) {
-      const tires = new THREE.InstancedMesh(tireGeo, rubberMat, tirePositions.length)
-      tirePositions.forEach((m, i) => tires.setMatrixAt(i, m))
+      const tires = new THREE.InstancedMesh(tireGeo, new THREE.MeshStandardMaterial({ roughness: 0.9 }), tirePositions.length)
+      const tireColors = [0xf2f2f2, 0x1d5bd8, 0xf2f2f2, 0xd42020]
+      tirePositions.forEach((m, i) => {
+        tires.setMatrixAt(i, m)
+        tires.setColorAt(i, new THREE.Color(tireColors[Math.floor(i / 2) % tireColors.length]))
+      })
       tires.castShadow = true
       this.scene.add(tires)
     }
@@ -1042,6 +1097,47 @@ export class Scene3D {
       this.scene.add(mesh)
     }
     const EMB_Y = 1.3
+
+    // Alambrado al pie del terraplén: postes e hilos, más carteles de sponsors
+    // mirando a la pista.
+    const fencePostGeo = new THREE.CylinderGeometry(0.05, 0.05, 1.6, 6)
+    const fencePosts: THREE.Matrix4[] = []
+    const wirePts: THREE.Vector3[] = []
+    const sponsorMats = ['YPF', 'AUTOMOTORES ALVAREZ', 'LUBRICENTRO', 'NEUMÁTICOS', 'TALLER SCHIAVONE', 'CARROCERÍAS', 'AGRO ALVEAR', 'MG'].map(
+      (txt, i) =>
+        new THREE.MeshStandardMaterial({
+          map: makeBannerTexture(txt, ['#1d3f8f', '#ffffff', '#d42020', '#ffd500', '#0f7a3a', '#ffffff', '#1d3f8f', '#111111'][i], ['#ffffff', '#1d3f8f', '#ffffff', '#111111', '#ffffff', '#d42020', '#ffd500', '#ffffff'][i]),
+          side: THREE.DoubleSide,
+          roughness: 0.85,
+        }),
+    )
+    const bannerGeo = new THREE.PlaneGeometry(6, 1.1)
+    let bannerIdx = 0
+    for (let i = 0; i < n; i += 4) {
+      const p = t.points[i]
+      const nx = -Math.sin(p.heading)
+      const ny = Math.cos(p.heading)
+      const outward = outwardAt(p)
+      const off = half + 9.5
+      const px = p.x + nx * off * outward
+      const py = p.y + ny * off * outward
+      fencePosts.push(new THREE.Matrix4().setPosition(px, 0.8, py))
+      for (const h of [0.5, 1.0, 1.5]) wirePts.push(new THREE.Vector3(px, h, py))
+      if (i % 44 === 0 && rnd() < 0.7) {
+        const b = new THREE.Mesh(bannerGeo, sponsorMats[bannerIdx++ % sponsorMats.length])
+        b.position.set(px, 0.85, py)
+        b.rotation.y = -p.heading
+        this.scene.add(b)
+      }
+    }
+    const fencePostMesh = new THREE.InstancedMesh(fencePostGeo, new THREE.MeshStandardMaterial({ color: 0x555555, metalness: 0.5 }), fencePosts.length)
+    fencePosts.forEach((m, i) => fencePostMesh.setMatrixAt(i, m))
+    this.scene.add(fencePostMesh)
+    for (let h = 0; h < 3; h++) {
+      const pts = wirePts.filter((_, i) => i % 3 === h)
+      pts.push(pts[0].clone())
+      this.scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0x777777 })))
+    }
 
     // --- Autos del público alrededor de toda la pista, sobre el terraplén ---
     const bodyGeo = new THREE.BoxGeometry(4.3, 1.3, 1.85)
@@ -1467,6 +1563,10 @@ export class Scene3D {
       for (const fw of v.frontWheels) fw.rotation.y = -c.steerAngle
       const spin = (c.speed * dt) / 0.36
       for (const w of v.wheels) w.rotation.z -= spin
+      for (const mw of v.modelWheels) {
+        mw.mesh.rotation.z -= (c.speed * dt) / mw.radius
+        if (mw.front) mw.pivot.rotation.y = -c.steerAngle
+      }
       this.updateDust(c, v, dt)
       this.updateMarks(c, v, dt)
     }
@@ -1505,10 +1605,11 @@ export class Scene3D {
     this.camera.updateProjectionMatrix()
 
     // Sol de tarde, bajo y cálido; la sombra sigue al jugador.
-    this.sun.position.set(player.x - 120, 70, player.y - 85)
+    this.sun.position.set(player.x - 130, 48, player.y - 90)
     this.sun.target.position.set(player.x, 0, player.y)
     this.sun.target.updateMatrixWorld()
 
+    this.grade.uniforms.time.value = this.time % 100
     this.composer.render()
   }
 
@@ -1537,7 +1638,7 @@ export class Scene3D {
 
   private updateDust(c: Car, v: CarView, dt: number) {
     const sliding = Math.abs(c.lateralSpeed) > 1.5
-    const rate = c.speed > 4 ? (sliding ? 80 : 26) * (c.onAsphalt ? 1 : 1.6) : 0
+    const rate = c.speed > 4 ? (sliding ? 40 : 12) * (c.onAsphalt ? 1 : 1.6) : 0
     v.dustNext -= dt
     if (rate > 0 && v.dustNext <= 0) {
       v.dustNext = 1 / rate
@@ -1573,8 +1674,8 @@ export class Scene3D {
       s.visible = true
       s.position.y += dt * 1.1
       s.position.x += (s.userData.drift as number) * dt
-      s.scale.setScalar(0.9 + a * 5)
-      ;(s.material as THREE.SpriteMaterial).opacity = 0.5 * (1 - a) * (1 - a)
+      s.scale.setScalar(0.9 + a * 4)
+      ;(s.material as THREE.SpriteMaterial).opacity = 0.32 * (1 - a) * (1 - a)
     }
   }
 

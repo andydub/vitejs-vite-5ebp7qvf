@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js'
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { CAR_SPEC } from './car'
 
 /**
@@ -93,6 +94,159 @@ function glbWithDataUriImages(bytes: Uint8Array): ArrayBuffer {
 const loader = new GLTFLoader()
 loader.setMeshoptDecoder(MeshoptDecoder)
 
+export interface WheelPart {
+  name: string
+  front: boolean
+  radius: number
+}
+
+/** Nombres de los pivotes de rueda dentro de un modelo ya separado. */
+export const WHEEL_NAMES = ['wheel_f_l', 'wheel_f_r', 'wheel_r_l', 'wheel_r_r']
+
+function median(values: number[]): number {
+  if (!values.length) return 0
+  const v = [...values].sort((a, b) => a - b)
+  return v[Math.floor(v.length / 2)]
+}
+
+/**
+ * Separa las cuatro ruedas de una malla única de auto ya normalizada (trompa
+ * a +X, apoyada en y=0). Busca los cúmulos de vértices bajos y externos para
+ * ubicar los ejes, corta los triángulos que caen dentro de cada cilindro de
+ * rueda y los pasa a mallas propias con pivote en el centro de la rueda.
+ */
+function splitWheels(outer: THREE.Group): THREE.Group {
+  outer.updateMatrixWorld(true)
+  const meshes: THREE.Mesh[] = []
+  outer.traverse((o) => {
+    if ((o as THREE.Mesh).isMesh) meshes.push(o as THREE.Mesh)
+  })
+  if (meshes.length === 0) return outer
+  // Geometría única en el espacio del grupo exterior.
+  const parts: THREE.BufferGeometry[] = []
+  let material: THREE.Material | THREE.Material[] = meshes[0].material
+  for (const m of meshes) {
+    const g = (m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone()) as THREE.BufferGeometry
+    for (const name of Object.keys(g.attributes)) {
+      if (!['position', 'normal', 'uv', 'tangent'].includes(name)) {
+        g.deleteAttribute(name)
+        continue
+      }
+      // Los atributos pueden venir cuantizados (enteros normalizados): pasarlos a flotante.
+      const src = g.getAttribute(name) as THREE.BufferAttribute
+      const out = new Float32Array(src.count * src.itemSize)
+      for (let i = 0; i < src.count; i++) {
+        for (let k = 0; k < src.itemSize; k++) out[i * src.itemSize + k] = src.getComponent(i, k)
+      }
+      g.setAttribute(name, new THREE.BufferAttribute(out, src.itemSize))
+    }
+    g.applyMatrix4(m.matrixWorld)
+    parts.push(g)
+    material = m.material
+  }
+  const geo = parts.length === 1 ? parts[0] : mergeGeometries(parts)
+  const pos = geo.getAttribute('position') as THREE.BufferAttribute
+  const n = pos.count
+
+  // Ejes: vértices bajos y externos, adelante (x>0) y atrás (x<0).
+  const fx: number[] = []
+  const fz: number[] = []
+  const rx: number[] = []
+  const rz: number[] = []
+  for (let i = 0; i < n; i++) {
+    const y = pos.getY(i)
+    const z = Math.abs(pos.getZ(i))
+    if (y > 0.45 || z < 0.45) continue
+    const x = pos.getX(i)
+    if (x > 0.3) {
+      fx.push(x)
+      fz.push(z)
+    } else if (x < -0.3) {
+      rx.push(x)
+      rz.push(z)
+    }
+  }
+  if (fx.length < 50 || rx.length < 50) return outer
+  const axles = [
+    { x: median(fx), z: median(fz), front: true },
+    { x: median(rx), z: median(rz), front: false },
+  ]
+  // Radio de cada eje: la altura máxima de los vértices cerca del eje.
+  const wheels = axles.flatMap((a) => {
+    let top = 0
+    for (let i = 0; i < n; i++) {
+      if (Math.abs(pos.getX(i) - a.x) < 0.3 && Math.abs(Math.abs(pos.getZ(i)) - a.z) < 0.25) top = Math.max(top, pos.getY(i))
+    }
+    const radius = Math.min(0.5, Math.max(0.25, top / 2))
+    return [-1, 1].map((side) => ({ ...a, side, radius, cy: radius }))
+  })
+
+  // Clasificación de triángulos.
+  const tri = n / 3
+  const owner = new Int8Array(tri).fill(-1)
+  const counts = new Array(wheels.length + 1).fill(0)
+  for (let t = 0; t < tri; t++) {
+    const i = t * 3
+    const cx = (pos.getX(i) + pos.getX(i + 1) + pos.getX(i + 2)) / 3
+    const cy = (pos.getY(i) + pos.getY(i + 1) + pos.getY(i + 2)) / 3
+    const cz = (pos.getZ(i) + pos.getZ(i + 1) + pos.getZ(i + 2)) / 3
+    for (let w = 0; w < wheels.length; w++) {
+      const wh = wheels[w]
+      const dx = cx - wh.x
+      const dy = cy - wh.cy
+      const dz = cz - wh.side * wh.z
+      if (Math.sign(cz) !== wh.side) continue
+      if (dx * dx + dy * dy < (wh.radius * 1.08) ** 2 && Math.abs(dz) < 0.28) {
+        owner[t] = w
+        break
+      }
+    }
+    counts[owner[t] + 1]++
+  }
+
+  const build = (filter: (t: number) => boolean, offset: THREE.Vector3): THREE.BufferGeometry => {
+    const g = new THREE.BufferGeometry()
+    for (const name of Object.keys(geo.attributes)) {
+      const src = geo.getAttribute(name) as THREE.BufferAttribute
+      const size = src.itemSize
+      const out: number[] = []
+      for (let t = 0; t < tri; t++) {
+        if (!filter(t)) continue
+        for (let v = 0; v < 3; v++) {
+          const i = t * 3 + v
+          for (let k = 0; k < size; k++) {
+            let val = src.array[i * size + k] as number
+            if (name === 'position') val -= k === 0 ? offset.x : k === 1 ? offset.y : k === 2 ? offset.z : 0
+            out.push(val)
+          }
+        }
+      }
+      g.setAttribute(name, new THREE.Float32BufferAttribute(out, size))
+    }
+    return g
+  }
+
+  const result = new THREE.Group()
+  const body = new THREE.Mesh(build((t) => owner[t] === -1, new THREE.Vector3()), material)
+  body.castShadow = true
+  body.name = 'body'
+  result.add(body)
+  wheels.forEach((wh, w) => {
+    if (counts[w + 1] < 20) return
+    const center = new THREE.Vector3(wh.x, wh.cy, wh.side * wh.z)
+    const mesh = new THREE.Mesh(build((t) => owner[t] === w, center), material)
+    mesh.castShadow = true
+    mesh.name = 'wheel_mesh'
+    const pivot = new THREE.Object3D()
+    pivot.name = `wheel_${wh.front ? 'f' : 'r'}_${wh.side < 0 ? 'l' : 'r'}`
+    pivot.position.copy(center)
+    pivot.userData.radius = wh.radius
+    pivot.add(mesh)
+    result.add(pivot)
+  })
+  return result
+}
+
 /**
  * Carga un GLB y lo normaliza: centrado en X/Z, apoyado en y=0, escalado al
  * largo real del auto y girado para que la trompa apunte a +X.
@@ -131,7 +285,7 @@ export function loadCarModel(cfg: CarModelConfig): Promise<THREE.Group> {
         wrapper.position.set(-center.x, -box2.min.y + (cfg.liftM ?? 0), -center.z)
         const outer = new THREE.Group()
         outer.add(wrapper)
-        resolve(outer)
+        resolve(splitWheels(outer))
       }
       if (embedded) {
         // Imágenes como data URI y carga por <img> (sin fetch ni blob), que
