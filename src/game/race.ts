@@ -1,14 +1,15 @@
 import { aiControls } from './ai'
 import { Car, resolveCollisions, type Controls } from './car'
 import { Track } from './track'
+import { CAR_MODELS, type CarModelConfig } from './models'
 
 export type RacePhase = 'countdown' | 'racing' | 'finished'
 
 // Liveries inspirados en fotos de la categoría: el 2 magenta y negro, el 29
 // azul de YPF y el 1 de aluminio con jaula azul.
-const RIVALS = [
-  { name: 'MG Racing', number: 1, color: '#c9ccd1', cage: '#1f5fd6', skill: 0.95 },
-  { name: 'Schiavone', number: 29, color: '#1d5bd8', cage: '#dcdcdc', skill: 0.92 },
+const RIVALS: { name: string; number: number; color: string; cage: string; skill: number; model?: CarModelConfig }[] = [
+  { name: 'MG Racing', number: 1, color: '#c9ccd1', cage: '#1f5fd6', skill: 0.95, model: CAR_MODELS.car1 },
+  { name: 'Schiavone', number: 29, color: '#1d5bd8', cage: '#dcdcdc', skill: 0.92, model: CAR_MODELS.car29 },
   { name: 'H. Álvarez', number: 2, color: '#c8189a', cage: '#111111', skill: 0.88 },
   { name: 'M. Daniele', number: 7, color: '#f26b21', cage: '#222222', skill: 0.82 },
   { name: 'R. Majstruk', number: 21, color: '#2fbf71', cage: '#222222', skill: 0.76 },
@@ -31,7 +32,9 @@ export class Race {
     const cars: Car[] = []
     // El jugador larga último para que la carrera tenga sentido.
     RIVALS.forEach((r, i) => {
-      cars.push(new Car(i, r.name, r.number, r.color, r.cage, false, r.skill, this.track, i))
+      const car = new Car(i, r.name, r.number, r.color, r.cage, false, r.skill, this.track, i)
+      car.model = r.model ?? null
+      cars.push(car)
     })
     this.player = new Car(RIVALS.length, playerName, 99, '#ffd500', '#111111', true, 1, this.track, RIVALS.length)
     cars.push(this.player)

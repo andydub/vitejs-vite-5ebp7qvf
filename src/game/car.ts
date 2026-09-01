@@ -1,4 +1,5 @@
 import { Track, wrapAngle } from './track'
+import type { CarModelConfig } from './models'
 
 // Parámetros aproximados de un Sport 4 (auto de tierra con motor 4 cilindros
 // preparado, ~130 CV, ~600 kg, ruedas delanteras descubiertas).
@@ -48,6 +49,8 @@ export class Car {
   readonly color: string
   readonly cageColor: string
   readonly isPlayer: boolean
+  /** Modelo 3D generado a partir de fotos; si falta se usa el auto procedural. */
+  model: CarModelConfig | null = null
   readonly skill: number // 0..1, afecta a la IA
 
   constructor(

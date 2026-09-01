@@ -1,6 +1,14 @@
 import * as THREE from 'three'
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js'
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js'
+import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js'
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js'
+import { Lensflare, LensflareElement } from 'three/addons/objects/Lensflare.js'
 import { CAR_SPEC, type Car } from './car'
 import { Track } from './track'
+import { loadCarModel } from './models'
 
 // Convención: el mundo del juego es (x, y) en planta; en Three.js va a (x, 0, y).
 // Un rumbo θ (cos θ, sin θ) equivale a rotation.y = -θ con el auto mirando +X.
@@ -684,6 +692,8 @@ export class Scene3D {
   private tmpQuat = new THREE.Quaternion()
   private tmpScale = new THREE.Vector3(1, 1, 1)
   private tmpPos = new THREE.Vector3()
+  private composer!: EffectComposer
+  private bloom!: UnrealBloomPass
   private smoke: THREE.Sprite[] = []
   private flags: THREE.Mesh[] = []
   private time = 0
@@ -731,11 +741,55 @@ export class Scene3D {
     this.buildTrack()
     this.buildSurroundings()
     this.buildMarks(cars.length)
+    this.buildPostProcessing()
     for (const c of cars) {
       const v = buildCar(c)
       this.scene.add(v.group)
       this.views.set(c.id, v)
+      if (c.model) this.attachModel(c, v)
     }
+  }
+
+  /** Reemplaza el auto procedural por el modelo generado a partir de fotos, cuando termina de cargar. */
+  private attachModel(car: Car, view: CarView) {
+    const cfg = car.model!
+    loadCarModel(cfg)
+      .then((model) => {
+        // Ocultar carrocería y ruedas procedurales; conservar sombra de contacto y polvo.
+        view.body.visible = false
+        for (const fw of view.frontWheels) fw.visible = false
+        for (const w of view.wheels) w.visible = false
+        view.group.add(model)
+      })
+      .catch((err: unknown) => {
+        console.warn('No se pudo cargar el modelo del auto', cfg.url, err)
+      })
+  }
+
+  /** Bloom suave, viñeta con leve calidez y antialiasing SMAA. */
+  private buildPostProcessing() {
+    this.composer = new EffectComposer(this.renderer)
+    this.composer.addPass(new RenderPass(this.scene, this.camera))
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.22, 0.6, 0.85)
+    this.composer.addPass(this.bloom)
+    const grade = new ShaderPass({
+      uniforms: { tDiffuse: { value: null }, strength: { value: 0.55 } },
+      vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+      fragmentShader: `uniform sampler2D tDiffuse; uniform float strength; varying vec2 vUv;
+        void main(){
+          vec4 c = texture2D(tDiffuse, vUv);
+          // Viñeta.
+          vec2 d = vUv - 0.5; float v = 1.0 - smoothstep(0.35, 0.95, length(d) * 1.35) * strength;
+          // Un poco más de saturación y calidez de tarde.
+          float l = dot(c.rgb, vec3(0.299, 0.587, 0.114));
+          vec3 sat = mix(vec3(l), c.rgb, 1.12);
+          sat *= vec3(1.03, 1.0, 0.96);
+          gl_FragColor = vec4(sat * v, c.a);
+        }`,
+    })
+    this.composer.addPass(grade)
+    this.composer.addPass(new OutputPass())
+    this.composer.addPass(new SMAAPass())
   }
 
   private buildSky() {
@@ -790,7 +844,7 @@ export class Scene3D {
     this.scene.add(hemi)
     this.sun = new THREE.DirectionalLight(0xffe9c8, 1.9)
     this.sun.castShadow = true
-    this.sun.shadow.mapSize.set(2048, 2048)
+    this.sun.shadow.mapSize.set(4096, 4096)
     const s = 60
     this.sun.shadow.camera.left = -s
     this.sun.shadow.camera.right = s
@@ -803,11 +857,21 @@ export class Scene3D {
     this.sun.shadow.blurSamples = 8
     this.scene.add(this.sun)
     this.scene.add(this.sun.target)
+    const flareTex = makeSoftTexture('rgba(255,244,214,1)', 'rgba(255,230,180,0)')
+    const ringTex = makeSoftTexture('rgba(255,200,150,0.35)', 'rgba(255,200,150,0)')
+    const flare = new Lensflare()
+    flare.addElement(new LensflareElement(flareTex, 420, 0, new THREE.Color(0xfff2d8)))
+    flare.addElement(new LensflareElement(ringTex, 90, 0.35))
+    flare.addElement(new LensflareElement(ringTex, 140, 0.6))
+    flare.addElement(new LensflareElement(ringTex, 60, 0.9))
+    this.sun.add(flare)
   }
 
   private buildGround() {
     const tex = makeGroundTexture(this.track, 2048, this.center, GROUND_SIZE, this.paddock)
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(GROUND_SIZE, GROUND_SIZE), new THREE.MeshStandardMaterial({ map: tex, roughness: 1 }))
+    const bump = makeLooseDirtTexture()
+    bump.repeat.set(GROUND_SIZE / 6, GROUND_SIZE / 6)
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(GROUND_SIZE, GROUND_SIZE), new THREE.MeshStandardMaterial({ map: tex, roughness: 1, bumpMap: bump, bumpScale: 0.35 }))
     ground.rotation.x = -Math.PI / 2
     ground.position.set(this.center.x, 0, this.center.y)
     ground.receiveShadow = true
@@ -862,12 +926,18 @@ export class Scene3D {
     const half = t.width / 2
     const trackTex = makeTrackTexture()
     trackTex.repeat.set(1, 1)
-    this.scene.add(this.ribbon([{ off: -half, y: 0.04 }, { off: half, y: 0.04 }], new THREE.MeshStandardMaterial({ map: trackTex, roughness: 0.95 }), 34))
+    this.scene.add(
+      this.ribbon(
+        [{ off: -half, y: 0.04 }, { off: half, y: 0.04 }],
+        new THREE.MeshStandardMaterial({ map: trackTex, roughness: 0.95, bumpMap: trackTex, bumpScale: 0.12 }),
+        34,
+      ),
+    )
 
     // Bermas: lomo de tierra suelta a cada lado, más alto en el exterior de las curvas.
     const loose = makeLooseDirtTexture()
     loose.repeat.set(1, 1)
-    const looseMat = new THREE.MeshStandardMaterial({ map: loose, roughness: 1, side: THREE.DoubleSide })
+    const looseMat = new THREE.MeshStandardMaterial({ map: loose, roughness: 1, side: THREE.DoubleSide, bumpMap: loose, bumpScale: 0.3 })
     for (const side of [-1, 1]) {
       this.scene.add(
         this.ribbon(
@@ -1330,7 +1400,7 @@ export class Scene3D {
     const hillMat = new THREE.MeshStandardMaterial({ color: 0x8a94a4, flatShading: true, roughness: 1 })
     const snowMat = new THREE.MeshStandardMaterial({ color: 0xf6f8fa, flatShading: true, roughness: 1 })
     const cerroDist = 2300
-    const cerroAng = -1.1
+    const cerroAng = Math.PI
     const cerroX = cxm + Math.cos(cerroAng) * cerroDist
     const cerroZ = cym + Math.sin(cerroAng) * cerroDist
     const cerro = new THREE.Mesh(new THREE.ConeGeometry(1, 1, 7), hillMat)
@@ -1366,6 +1436,9 @@ export class Scene3D {
   resize(width: number, height: number, dpr: number) {
     this.renderer.setPixelRatio(dpr)
     this.renderer.setSize(width, height, false)
+    this.composer.setPixelRatio(dpr)
+    this.composer.setSize(width, height)
+    this.bloom.resolution.set(width / 2, height / 2)
     this.camera.aspect = width / height
     this.camera.updateProjectionMatrix()
   }
@@ -1431,11 +1504,11 @@ export class Scene3D {
     this.camera.updateProjectionMatrix()
 
     // Sol de tarde, bajo y cálido; la sombra sigue al jugador.
-    this.sun.position.set(player.x - 110, 95, player.y + 70)
+    this.sun.position.set(player.x - 120, 70, player.y - 85)
     this.sun.target.position.set(player.x, 0, player.y)
     this.sun.target.updateMatrixWorld()
 
-    this.renderer.render(this.scene, this.camera)
+    this.composer.render()
   }
 
   private updateMarks(c: Car, v: CarView, dt: number) {
