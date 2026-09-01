@@ -413,6 +413,10 @@ interface CarView {
   markDist: number
   markIndex: number
   modelWheels: { pivot: THREE.Object3D; mesh: THREE.Object3D; front: boolean; radius: number }[]
+  // Suspensión: nodos que se mueven y estado del resorte de la carrocería.
+  bodyNode: THREE.Object3D
+  wheelNodes: { node: THREE.Object3D; baseY: number; x: number; z: number }[]
+  susp: { heave: number; heaveV: number; pitch: number; pitchV: number; roll: number; rollV: number; prevSpeed: number; prevHeading: number }
 }
 
 /**
@@ -678,7 +682,27 @@ function buildCar(car: Car): CarView {
     wheels.push(rear)
   }
 
-  return { group, body, frontWheels, wheels, dust: [], dustAge: [], dustNext: 0, markDist: 0, markIndex: 0, modelWheels: [] }
+  const wheelNodes = [
+    { node: frontWheels[0], baseY: 0.3, x: L * 0.36, z: -W * 0.5 },
+    { node: frontWheels[1], baseY: 0.3, x: L * 0.36, z: W * 0.5 },
+    { node: wheels[1], baseY: 0.42, x: -L * 0.4, z: -W * 0.52 },
+    { node: wheels[3], baseY: 0.42, x: -L * 0.4, z: W * 0.52 },
+  ]
+  return {
+    group,
+    body,
+    frontWheels,
+    wheels,
+    dust: [],
+    dustAge: [],
+    dustNext: 0,
+    markDist: 0,
+    markIndex: 0,
+    modelWheels: [],
+    bodyNode: body,
+    wheelNodes,
+    susp: { heave: 0, heaveV: 0, pitch: 0, pitchV: 0, roll: 0, rollV: 0, prevSpeed: 0, prevHeading: 0 },
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -788,11 +812,18 @@ export class Scene3D {
         for (const w of view.wheels) w.visible = false
         view.group.add(model)
         view.modelWheels = []
+        const wheelNodes: CarView['wheelNodes'] = []
         for (const name of WHEEL_NAMES) {
           const pivot = model.getObjectByName(name)
           if (pivot && pivot.children[0]) {
             view.modelWheels.push({ pivot, mesh: pivot.children[0], front: name.includes('_f_'), radius: (pivot.userData.radius as number) || 0.4 })
+            wheelNodes.push({ node: pivot, baseY: pivot.position.y, x: pivot.position.x, z: pivot.position.z })
           }
+        }
+        const bodyNode = model.getObjectByName('body')
+        if (bodyNode && wheelNodes.length === 4) {
+          view.bodyNode = bodyNode
+          view.wheelNodes = wheelNodes
         }
       })
       .catch((err: unknown) => {
@@ -1558,8 +1589,7 @@ export class Scene3D {
       const v = this.views.get(c.id)!
       v.group.position.set(c.x, 0, c.y)
       v.group.rotation.y = -c.heading
-      v.body.rotation.x = THREE.MathUtils.lerp(v.body.rotation.x, -c.lateralSpeed * 0.02, 0.2)
-      v.body.rotation.z = THREE.MathUtils.lerp(v.body.rotation.z, c.speed * 0.002, 0.2)
+      this.updateSuspension(c, v, dt)
       for (const fw of v.frontWheels) fw.rotation.y = -c.steerAngle
       const spin = (c.speed * dt) / 0.36
       for (const w of v.wheels) w.rotation.z -= spin
@@ -1611,6 +1641,85 @@ export class Scene3D {
 
     this.grade.uniforms.time.value = this.time % 100
     this.composer.render()
+  }
+
+  /** Ondulaciones de la tierra (metros) en un punto del mundo. */
+  private groundBump(x: number, z: number, onTrack: boolean): number {
+    const a = onTrack ? 0.02 : 0.06
+    return (
+      a *
+      (Math.sin(x * 0.9 + z * 0.35) * Math.sin(x * 0.27 - z * 0.8) +
+        0.7 * Math.sin(x * 1.7 + z * 1.3) * Math.cos(x * 1.1 - z * 1.9) +
+        0.35 * Math.sin(x * 3.1 + z * 2.6))
+    )
+  }
+
+  /**
+   * Suspensión: cada rueda sigue el relieve de la tierra; la carrocería
+   * responde con resorte y amortiguador en altura, cabeceo y rolido, más el
+   * cabeceo al acelerar o frenar y el rolido en las curvas.
+   */
+  private updateSuspension(c: Car, v: CarView, dt: number) {
+    if (dt <= 0) return
+    const cos = Math.cos(c.heading)
+    const sin = Math.sin(c.heading)
+    let sum = 0
+    let front = 0
+    let rear = 0
+    let left = 0
+    let right = 0
+    let nf = 0
+    let nr = 0
+    let nl = 0
+    let nrg = 0
+    for (const w of v.wheelNodes) {
+      const wx = c.x + w.x * cos - w.z * sin
+      const wz = c.y + w.x * sin + w.z * cos
+      const h = this.groundBump(wx, wz, c.onAsphalt)
+      w.node.position.y = w.baseY + h
+      sum += h
+      if (w.x > 0) {
+        front += h
+        nf++
+      } else {
+        rear += h
+        nr++
+      }
+      if (w.z < 0) {
+        left += h
+        nl++
+      } else {
+        right += h
+        nrg++
+      }
+    }
+    const n = Math.max(1, v.wheelNodes.length)
+    const s = v.susp
+    const accel = (c.speed - s.prevSpeed) / dt
+    let yawRate = (c.heading - s.prevHeading) / dt
+    if (yawRate > Math.PI) yawRate -= 2 * Math.PI / dt
+    if (yawRate < -Math.PI) yawRate += 2 * Math.PI / dt
+    s.prevSpeed = c.speed
+    s.prevHeading = c.heading
+    const latAccel = THREE.MathUtils.clamp(c.speed * yawRate, -12, 12)
+    const longAccel = THREE.MathUtils.clamp(accel, -12, 12)
+
+    const heaveT = sum / n
+    const pitchT = Math.atan((front / Math.max(1, nf) - rear / Math.max(1, nr)) / 2.8) + longAccel * 0.004
+    const rollT = Math.atan((left / Math.max(1, nl) - right / Math.max(1, nrg)) / 1.7) - latAccel * 0.006
+
+    const step = (x: number, vel: number, target: number, k: number, damp: number): [number, number] => {
+      const a = k * (target - x) - damp * vel
+      vel += a * dt
+      x += vel * dt
+      return [x, vel]
+    }
+    ;[s.heave, s.heaveV] = step(s.heave, s.heaveV, heaveT, 90, 12)
+    ;[s.pitch, s.pitchV] = step(s.pitch, s.pitchV, pitchT, 80, 11)
+    ;[s.roll, s.rollV] = step(s.roll, s.rollV, rollT, 80, 11)
+    v.bodyNode.position.y = s.heave
+    v.bodyNode.rotation.z = s.pitch
+    v.bodyNode.rotation.x = s.roll
   }
 
   private updateMarks(c: Car, v: CarView, dt: number) {

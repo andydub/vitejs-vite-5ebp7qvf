@@ -109,11 +109,69 @@ function median(values: number[]): number {
   return v[Math.floor(v.length / 2)]
 }
 
+/** Ajuste algebraico de círculo (Kasa) a puntos 2D. Devuelve centro y radio. */
+function fitCircle(pts: { x: number; y: number }[]): { cx: number; cy: number; r: number } | null {
+  if (pts.length < 8) return null
+  // Resolver min Σ (x²+y² + D x + E y + F)² por mínimos cuadrados (3x3).
+  let sxx = 0
+  let sxy = 0
+  let syy = 0
+  let sx = 0
+  let sy = 0
+  let sxz = 0
+  let syz = 0
+  let sz = 0
+  const n = pts.length
+  for (const p of pts) {
+    const z = p.x * p.x + p.y * p.y
+    sxx += p.x * p.x
+    sxy += p.x * p.y
+    syy += p.y * p.y
+    sx += p.x
+    sy += p.y
+    sxz += p.x * z
+    syz += p.y * z
+    sz += z
+  }
+  // [sxx sxy sx; sxy syy sy; sx sy n] [D E F]' = -[sxz syz sz]'
+  const m = [
+    [sxx, sxy, sx],
+    [sxy, syy, sy],
+    [sx, sy, n],
+  ]
+  const b = [-sxz, -syz, -sz]
+  // Eliminación gaussiana.
+  for (let i = 0; i < 3; i++) {
+    let piv = i
+    for (let r = i + 1; r < 3; r++) if (Math.abs(m[r][i]) > Math.abs(m[piv][i])) piv = r
+    ;[m[i], m[piv]] = [m[piv], m[i]]
+    ;[b[i], b[piv]] = [b[piv], b[i]]
+    if (Math.abs(m[i][i]) < 1e-9) return null
+    for (let r = i + 1; r < 3; r++) {
+      const f = m[r][i] / m[i][i]
+      for (let c = i; c < 3; c++) m[r][c] -= f * m[i][c]
+      b[r] -= f * b[i]
+    }
+  }
+  const sol = [0, 0, 0]
+  for (let i = 2; i >= 0; i--) {
+    let acc = b[i]
+    for (let c = i + 1; c < 3; c++) acc -= m[i][c] * sol[c]
+    sol[i] = acc / m[i][i]
+  }
+  const cx = -sol[0] / 2
+  const cy = -sol[1] / 2
+  const r = Math.sqrt(Math.max(0, cx * cx + cy * cy - sol[2]))
+  return { cx, cy, r }
+}
+
 /**
  * Separa las cuatro ruedas de una malla única de auto ya normalizada (trompa
- * a +X, apoyada en y=0). Busca los cúmulos de vértices bajos y externos para
- * ubicar los ejes, corta los triángulos que caen dentro de cada cilindro de
- * rueda y los pasa a mallas propias con pivote en el centro de la rueda.
+ * a +X, apoyada en y=0). Para cada rueda ajusta un círculo a la cara externa
+ * de la cubierta (los vértices más alejados del centro del auto) para obtener
+ * el eje exacto y el radio, y corta solo los triángulos que caen dentro del
+ * cilindro de la cubierta y la llanta. Ejes, brazos y frenos quedan en la
+ * carrocería.
  */
 function splitWheels(outer: THREE.Group): THREE.Group {
   outer.updateMatrixWorld(true)
@@ -122,7 +180,6 @@ function splitWheels(outer: THREE.Group): THREE.Group {
     if ((o as THREE.Mesh).isMesh) meshes.push(o as THREE.Mesh)
   })
   if (meshes.length === 0) return outer
-  // Geometría única en el espacio del grupo exterior.
   const parts: THREE.BufferGeometry[] = []
   let material: THREE.Material | THREE.Material[] = meshes[0].material
   for (const m of meshes) {
@@ -148,60 +205,101 @@ function splitWheels(outer: THREE.Group): THREE.Group {
   const pos = geo.getAttribute('position') as THREE.BufferAttribute
   const n = pos.count
 
-  // Ejes: vértices bajos y externos, adelante (x>0) y atrás (x<0).
+  // Ejes aproximados: vértices bajos y externos, adelante (x>0) y atrás (x<0).
   const fx: number[] = []
-  const fz: number[] = []
   const rx: number[] = []
-  const rz: number[] = []
   for (let i = 0; i < n; i++) {
-    const y = pos.getY(i)
-    const z = Math.abs(pos.getZ(i))
-    if (y > 0.45 || z < 0.45) continue
+    if (pos.getY(i) > 0.45 || Math.abs(pos.getZ(i)) < 0.45) continue
     const x = pos.getX(i)
-    if (x > 0.3) {
-      fx.push(x)
-      fz.push(z)
-    } else if (x < -0.3) {
-      rx.push(x)
-      rz.push(z)
-    }
+    if (x > 0.3) fx.push(x)
+    else if (x < -0.3) rx.push(x)
   }
   if (fx.length < 50 || rx.length < 50) return outer
   const axles = [
-    { x: median(fx), z: median(fz), front: true },
-    { x: median(rx), z: median(rz), front: false },
+    { x: median(fx), front: true },
+    { x: median(rx), front: false },
   ]
-  // Radio de cada eje: la altura máxima de los vértices cerca del eje.
-  const wheels = axles.flatMap((a) => {
-    let top = 0
-    for (let i = 0; i < n; i++) {
-      if (Math.abs(pos.getX(i) - a.x) < 0.3 && Math.abs(Math.abs(pos.getZ(i)) - a.z) < 0.25) top = Math.max(top, pos.getY(i))
-    }
-    const radius = Math.min(0.5, Math.max(0.25, top / 2))
-    return [-1, 1].map((side) => ({ ...a, side, radius, cy: radius }))
-  })
 
-  // Clasificación de triángulos.
+  interface Wheel {
+    front: boolean
+    side: number
+    cx: number
+    cy: number
+    r: number
+    zInner: number
+    zOuter: number
+  }
+  const wheels: Wheel[] = []
+  for (const a of axles) {
+    for (const side of [-1, 1]) {
+      // Región de búsqueda alrededor del eje aproximado, de un lado del auto.
+      const idx: number[] = []
+      let zOuter = 0
+      for (let i = 0; i < n; i++) {
+        const z = pos.getZ(i)
+        if (Math.sign(z) !== side || Math.abs(z) < 0.3) continue
+        if (Math.abs(pos.getX(i) - a.x) > 0.6 || pos.getY(i) > 1.0) continue
+        idx.push(i)
+        zOuter = Math.max(zOuter, Math.abs(z))
+      }
+      if (idx.length < 40) continue
+      // Cara externa de la cubierta: banda de vértices más alejados del centro.
+      const band = idx.filter((i) => Math.abs(pos.getZ(i)) >= zOuter - 0.07).map((i) => ({ x: pos.getX(i), y: pos.getY(i) }))
+      let fit = fitCircle(band)
+      if (!fit || !isFinite(fit.r) || fit.r < 0.15 || fit.r > 0.6 || Math.abs(fit.cx - a.x) > 0.4) {
+        // Alternativa: caja de la banda.
+        let minX = Infinity
+        let maxX = -Infinity
+        let maxY = 0
+        for (const p of band) {
+          minX = Math.min(minX, p.x)
+          maxX = Math.max(maxX, p.x)
+          maxY = Math.max(maxY, p.y)
+        }
+        fit = { cx: (minX + maxX) / 2, cy: maxY / 2, r: maxY / 2 }
+      }
+      // Radio robusto: percentil 92 de las distancias al centro en la banda.
+      const dists = band.map((p) => Math.hypot(p.x - fit!.cx, p.y - fit!.cy)).sort((u, v) => u - v)
+      const r = dists[Math.floor(dists.length * 0.92)] || fit.r
+      // Ancho de la cubierta: la cara interna es el |z| mínimo de los vértices
+      // que están a distancia radial de cubierta (no del eje ni de los brazos).
+      let zInner = zOuter
+      for (const i of idx) {
+        const d = Math.hypot(pos.getX(i) - fit.cx, pos.getY(i) - fit.cy)
+        if (d > r * 0.72 && d < r * 1.02) zInner = Math.min(zInner, Math.abs(pos.getZ(i)))
+      }
+      zInner = Math.max(zOuter - 0.5, Math.min(zOuter - 0.12, zInner))
+      wheels.push({ front: a.front, side, cx: fit.cx, cy: fit.cy, r, zInner, zOuter })
+    }
+  }
+  if (wheels.length < 4) return outer
+
+  // Clasificación de triángulos: los tres vértices dentro del cilindro de la rueda.
   const tri = n / 3
   const owner = new Int8Array(tri).fill(-1)
-  const counts = new Array(wheels.length + 1).fill(0)
+  const counts = new Array(wheels.length).fill(0)
+  const inside = (i: number, w: Wheel) => {
+    const z = pos.getZ(i)
+    if (Math.sign(z) !== w.side) return false
+    const az = Math.abs(z)
+    if (az < w.zInner - 0.015 || az > w.zOuter + 0.05) return false
+    const d = Math.hypot(pos.getX(i) - w.cx, pos.getY(i) - w.cy)
+    if (d > w.r * 1.04) return false
+    // Cerca del eje solo cuenta la cara externa de la llanta; lo que está
+    // hacia adentro (maza, brazos, frenos) queda en la carrocería.
+    // En la mitad interna del ancho solo cuenta la banda de la cubierta.
+    if (d < w.r * 0.72 && az < w.zOuter - (w.zOuter - w.zInner) * 0.45) return false
+    return true
+  }
   for (let t = 0; t < tri; t++) {
     const i = t * 3
-    const cx = (pos.getX(i) + pos.getX(i + 1) + pos.getX(i + 2)) / 3
-    const cy = (pos.getY(i) + pos.getY(i + 1) + pos.getY(i + 2)) / 3
-    const cz = (pos.getZ(i) + pos.getZ(i + 1) + pos.getZ(i + 2)) / 3
     for (let w = 0; w < wheels.length; w++) {
-      const wh = wheels[w]
-      const dx = cx - wh.x
-      const dy = cy - wh.cy
-      const dz = cz - wh.side * wh.z
-      if (Math.sign(cz) !== wh.side) continue
-      if (dx * dx + dy * dy < (wh.radius * 1.08) ** 2 && Math.abs(dz) < 0.28) {
+      if (inside(i, wheels[w]) && inside(i + 1, wheels[w]) && inside(i + 2, wheels[w])) {
         owner[t] = w
+        counts[w]++
         break
       }
     }
-    counts[owner[t] + 1]++
   }
 
   const build = (filter: (t: number) => boolean, offset: THREE.Vector3): THREE.BufferGeometry => {
@@ -232,15 +330,17 @@ function splitWheels(outer: THREE.Group): THREE.Group {
   body.name = 'body'
   result.add(body)
   wheels.forEach((wh, w) => {
-    if (counts[w + 1] < 20) return
-    const center = new THREE.Vector3(wh.x, wh.cy, wh.side * wh.z)
+    if (counts[w] < 20) return
+    const zc = wh.side * ((wh.zInner + wh.zOuter) / 2)
+    const center = new THREE.Vector3(wh.cx, wh.cy, zc)
     const mesh = new THREE.Mesh(build((t) => owner[t] === w, center), material)
     mesh.castShadow = true
     mesh.name = 'wheel_mesh'
     const pivot = new THREE.Object3D()
     pivot.name = `wheel_${wh.front ? 'f' : 'r'}_${wh.side < 0 ? 'l' : 'r'}`
     pivot.position.copy(center)
-    pivot.userData.radius = wh.radius
+    pivot.userData.radius = wh.r
+    pivot.userData.baseY = wh.cy
     pivot.add(mesh)
     result.add(pivot)
   })
