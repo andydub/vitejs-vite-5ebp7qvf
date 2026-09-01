@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js'
 import { CAR_SPEC } from './car'
 
 /**
@@ -15,6 +16,7 @@ export interface CarModelConfig {
 
 const cache = new Map<string, Promise<THREE.Group>>()
 const loader = new GLTFLoader()
+loader.setMeshoptDecoder(MeshoptDecoder)
 
 /**
  * Carga un GLB y lo normaliza: centrado en X/Z, apoyado en y=0, escalado al

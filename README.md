@@ -46,3 +46,10 @@ Abrir la URL que muestra Vite (por defecto http://localhost:5173).
 
 - El trazado es una aproximación: falta ajustarlo al plano real del circuito.
 - Modelos de auto y liveries basados en fotos reales de la categoría.
+
+## Modelos 3D de autos reales
+
+Los autos 29 y 1 se reemplazan por modelos generados a partir de fotos si
+existen los archivos `public/models/car29.glb` y `public/models/car1.glb`
+(GLB, con o sin compresión meshopt). Si faltan, se usa el auto procedural.
+La orientación de cada modelo se ajusta en `src/game/models.ts` (`yaw`).
