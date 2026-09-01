@@ -92,16 +92,19 @@ function makeNumberTexture(num: number, color: string): THREE.CanvasTexture {
   return tex
 }
 
-const wheelGeo = new THREE.CylinderGeometry(0.34, 0.34, 0.28, 18)
+const wheelGeo = new THREE.CylinderGeometry(0.3, 0.3, 0.22, 18)
 wheelGeo.rotateX(Math.PI / 2)
-const rearWheelGeo = new THREE.CylinderGeometry(0.4, 0.4, 0.36, 18)
+const rearWheelGeo = new THREE.CylinderGeometry(0.42, 0.42, 0.4, 18)
 rearWheelGeo.rotateX(Math.PI / 2)
-const hubGeo = new THREE.CylinderGeometry(0.18, 0.18, 0.3, 12)
+const hubGeo = new THREE.CylinderGeometry(0.15, 0.15, 0.24, 12)
 hubGeo.rotateX(Math.PI / 2)
+const rimGeo = new THREE.CylinderGeometry(0.3, 0.3, 0.42, 16)
+rimGeo.rotateX(Math.PI / 2)
+const netMat = new THREE.MeshStandardMaterial({ color: 0x111111, transparent: true, opacity: 0.45, side: THREE.DoubleSide })
 const rubberMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.95 })
 const hubMat = new THREE.MeshStandardMaterial({ color: 0xbfbfbf, roughness: 0.4, metalness: 0.6 })
 const cageMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.6, metalness: 0.4 })
-const bumperMat = new THREE.MeshStandardMaterial({ color: 0xd42020, roughness: 0.5 })
+const bumperMat = new THREE.MeshStandardMaterial({ color: 0xe8e8e8, roughness: 0.5, metalness: 0.3 })
 const glassMat = new THREE.MeshStandardMaterial({ color: 0x334455, roughness: 0.1, metalness: 0.3 })
 
 interface CarView {
@@ -114,16 +117,22 @@ interface CarView {
   dustNext: number
 }
 
-/** Auto Sport 4: cuña baja, ruedas delanteras descubiertas, jaula con techo. */
+/**
+ * Auto Sport 4 según las fotos: cuña baja con motor adelante y toma de aire
+ * asomando del capot, ruedas delanteras chicas y descubiertas, traseras más
+ * grandes con llanta plateada, jaula con red en la ventana sobre el eje
+ * trasero, placa con el número atrás y paragolpes trasero de caño.
+ */
 function buildCar(car: Car): CarView {
   const group = new THREE.Group()
   const body = new THREE.Group()
   group.add(body)
   const L = CAR_SPEC.lengthM
   const W = CAR_SPEC.widthM
-  const paint = new THREE.MeshStandardMaterial({ color: car.color, roughness: 0.35, metalness: 0.15 })
+  const paint = new THREE.MeshStandardMaterial({ color: car.color, roughness: 0.35, metalness: 0.2 })
+  const trim = new THREE.MeshStandardMaterial({ color: car.cageColor, roughness: 0.5, metalness: 0.4 })
   const numTex = makeNumberTexture(car.number, car.color)
-  const decalMat = new THREE.MeshStandardMaterial({ map: numTex, roughness: 0.4 })
+  const decalMat = new THREE.MeshStandardMaterial({ map: numTex, roughness: 0.4, side: THREE.DoubleSide })
   const roofTex = makeNumberTexture(car.number, car.color)
   roofTex.center.set(0.5, 0.5)
   roofTex.rotation = -Math.PI / 2
@@ -131,95 +140,115 @@ function buildCar(car: Car): CarView {
 
   // Cuerpo: cuña que baja hacia la trompa (perfil lateral extruido a lo ancho).
   const profile = new THREE.Shape()
-  profile.moveTo(-L * 0.28, 0.18)
-  profile.lineTo(L * 0.52, 0.22)
-  profile.lineTo(L * 0.52, 0.36)
-  profile.lineTo(L * 0.05, 0.62)
-  profile.lineTo(-L * 0.3, 0.62)
-  profile.lineTo(-L * 0.3, 0.18)
-  const bodyGeo = new THREE.ExtrudeGeometry(profile, { depth: W * 0.62, bevelEnabled: false })
-  bodyGeo.translate(0, 0, -W * 0.31)
+  profile.moveTo(-L * 0.45, 0.2)
+  profile.lineTo(L * 0.5, 0.24)
+  profile.lineTo(L * 0.5, 0.34)
+  profile.lineTo(L * 0.1, 0.58)
+  profile.lineTo(-L * 0.45, 0.66)
+  const bodyGeo = new THREE.ExtrudeGeometry(profile, { depth: W * 0.6, bevelEnabled: false })
+  bodyGeo.translate(0, 0, -W * 0.3)
   const bodyMesh = new THREE.Mesh(bodyGeo, paint)
   bodyMesh.castShadow = true
   body.add(bodyMesh)
 
-  // Cabina / jaula antivuelco.
+  // Motor: toma de aire con trompetas asomando del capot.
+  const intake = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.18, 0.5), cageMat)
+  intake.position.set(L * 0.12, 0.62, 0.05)
+  body.add(intake)
+  const trumpet = new THREE.CylinderGeometry(0.05, 0.035, 0.16, 8)
+  for (let i = 0; i < 4; i++) {
+    const t = new THREE.Mesh(trumpet, hubMat)
+    t.position.set(L * 0.12 - 0.18 + i * 0.12, 0.78, 0.05)
+    body.add(t)
+  }
+  // Escapes que salen del lateral del motor.
+  const header = new THREE.CylinderGeometry(0.035, 0.035, 0.7, 8)
+  for (let i = 0; i < 2; i++) {
+    const h = new THREE.Mesh(header, hubMat)
+    h.rotation.z = Math.PI / 2
+    h.position.set(L * 0.05 - i * 0.35, 0.36, -W * 0.34)
+    body.add(h)
+  }
+
+  // Jaula antivuelco sobre el eje trasero.
   const tube = new THREE.CylinderGeometry(0.03, 0.03, 1, 6)
-  const addTube = (a: THREE.Vector3, b: THREE.Vector3) => {
+  const addTube = (a: THREE.Vector3, b: THREE.Vector3, mat = trim) => {
     const len = a.distanceTo(b)
-    const m = new THREE.Mesh(tube, cageMat)
+    const m = new THREE.Mesh(tube, mat)
     m.scale.y = len
     m.position.copy(a).lerp(b, 0.5)
     m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize())
     body.add(m)
   }
-  const cx0 = -L * 0.28
-  const cx1 = L * 0.02
+  const cx0 = -L * 0.44
+  const cx1 = -L * 0.12
   const cz = W * 0.28
-  const yTop = 1.32
+  const yTop = 1.3
   const yBase = 0.6
   for (const z of [-cz, cz]) {
     addTube(new THREE.Vector3(cx0, yBase, z), new THREE.Vector3(cx0, yTop, z))
-    addTube(new THREE.Vector3(cx1, yBase, z), new THREE.Vector3(cx1 + 0.25, yTop, z))
-    addTube(new THREE.Vector3(cx0, yTop, z), new THREE.Vector3(cx1 + 0.25, yTop, z))
+    addTube(new THREE.Vector3(cx1, yBase, z), new THREE.Vector3(cx1 + 0.3, yTop, z))
+    addTube(new THREE.Vector3(cx0, yTop, z), new THREE.Vector3(cx1 + 0.3, yTop, z))
+    addTube(new THREE.Vector3(cx1 + 0.3, yTop, z), new THREE.Vector3(L * 0.1, 0.58, z))
   }
   addTube(new THREE.Vector3(cx0, yTop, -cz), new THREE.Vector3(cx0, yTop, cz))
-  addTube(new THREE.Vector3(cx1 + 0.25, yTop, -cz), new THREE.Vector3(cx1 + 0.25, yTop, cz))
+  addTube(new THREE.Vector3(cx1 + 0.3, yTop, -cz), new THREE.Vector3(cx1 + 0.3, yTop, cz))
   // Techo con el número.
-  const roof = new THREE.Mesh(new THREE.BoxGeometry(cx1 + 0.25 - cx0 + 0.1, 0.05, cz * 2 + 0.1), roofMat)
-  roof.position.set((cx0 + cx1 + 0.25) / 2, yTop + 0.03, 0)
+  const roof = new THREE.Mesh(new THREE.BoxGeometry(cx1 + 0.3 - cx0 + 0.1, 0.05, cz * 2 + 0.1), roofMat)
+  roof.position.set((cx0 + cx1 + 0.3) / 2, yTop + 0.03, 0)
   roof.castShadow = true
   body.add(roof)
-  // Parabrisas pequeño.
-  const wind = new THREE.Mesh(new THREE.PlaneGeometry(cz * 2, 0.4), glassMat)
-  wind.position.set(cx1 + 0.2, yTop - 0.22, 0)
+  // Parabrisas chico y red en las ventanas.
+  const wind = new THREE.Mesh(new THREE.PlaneGeometry(cz * 2, 0.36), glassMat)
+  wind.position.set(cx1 + 0.28, yTop - 0.2, 0)
   wind.rotation.y = -Math.PI / 2
-  wind.rotation.x = 0
   wind.material.side = THREE.DoubleSide
   body.add(wind)
+  for (const side of [-1, 1]) {
+    const net = new THREE.Mesh(new THREE.PlaneGeometry(cx1 + 0.3 - cx0, yTop - yBase), netMat)
+    net.position.set((cx0 + cx1 + 0.3) / 2, (yTop + yBase) / 2, side * cz)
+    net.rotation.y = side > 0 ? 0 : Math.PI
+    body.add(net)
+  }
   // Piloto (casco).
   const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 10), new THREE.MeshStandardMaterial({ color: 0xffffff }))
-  helmet.position.set(cx0 + 0.45, yTop - 0.35, 0.15)
+  helmet.position.set(cx0 + 0.4, yTop - 0.35, 0.12)
   body.add(helmet)
   // Laterales con número.
   for (const side of [-1, 1]) {
-    const plate = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.36), decalMat)
-    plate.position.set(-L * 0.12, 0.42, side * (W * 0.31 + 0.005))
+    const plate = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 0.3), decalMat)
+    plate.position.set(-L * 0.05, 0.42, side * (W * 0.3 + 0.005))
     plate.rotation.y = side > 0 ? 0 : Math.PI
     body.add(plate)
   }
-  // Paragolpes / nerf bars rojos.
-  const bar = new THREE.BoxGeometry(1.4, 0.06, 0.06)
+  // Placa con el número atrás, apoyada en la jaula.
+  const rearPlate = new THREE.Mesh(new THREE.PlaneGeometry(0.55, 0.5), decalMat)
+  rearPlate.position.set(cx0 - 0.1, yTop - 0.3, cz - 0.1)
+  rearPlate.rotation.y = -Math.PI / 2
+  body.add(rearPlate)
+  // Paragolpes trasero de caño (cuadro) y barras laterales.
+  const rx = -L * 0.56
+  addTube(new THREE.Vector3(rx, 0.28, -W * 0.42), new THREE.Vector3(rx, 0.28, W * 0.42), bumperMat)
+  addTube(new THREE.Vector3(rx, 0.62, -W * 0.42), new THREE.Vector3(rx, 0.62, W * 0.42), bumperMat)
+  addTube(new THREE.Vector3(rx, 0.28, -W * 0.42), new THREE.Vector3(rx, 0.62, -W * 0.42), bumperMat)
+  addTube(new THREE.Vector3(rx, 0.28, W * 0.42), new THREE.Vector3(rx, 0.62, W * 0.42), bumperMat)
   for (const side of [-1, 1]) {
-    const nerf = new THREE.Mesh(bar, bumperMat)
-    nerf.position.set(-L * 0.08, 0.35, side * (W * 0.5))
-    body.add(nerf)
-    const nerf2 = nerf.clone()
-    nerf2.position.y = 0.55
-    body.add(nerf2)
+    addTube(new THREE.Vector3(-L * 0.1, 0.4, side * W * 0.5), new THREE.Vector3(L * 0.2, 0.4, side * W * 0.5), trim)
   }
-  const rearBar = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, W * 0.9), bumperMat)
-  rearBar.position.set(-L * 0.5, 0.45, 0)
-  body.add(rearBar)
   // Brazos de suspensión delantera.
-  const arm = new THREE.BoxGeometry(0.05, 0.05, W * 0.5)
-  for (const y of [0.25, 0.42]) {
+  const arm = new THREE.BoxGeometry(0.05, 0.05, W * 0.55)
+  for (const y of [0.24, 0.4]) {
     const a = new THREE.Mesh(arm, cageMat)
     a.position.set(L * 0.36, y, 0)
     body.add(a)
   }
-  // Escape.
-  const exhaust = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.0, 8), hubMat)
-  exhaust.rotation.z = Math.PI / 2
-  exhaust.position.set(-L * 0.15, 0.3, W * 0.36)
-  body.add(exhaust)
 
   // Ruedas (fuera del cuerpo para que no se inclinen con el balanceo).
   const frontWheels: THREE.Object3D[] = []
   const wheels: THREE.Mesh[] = []
   for (const side of [-1, 1]) {
     const pivot = new THREE.Object3D()
-    pivot.position.set(L * 0.36, 0.34, side * (W * 0.5))
+    pivot.position.set(L * 0.36, 0.3, side * (W * 0.5))
     const wm = new THREE.Mesh(wheelGeo, rubberMat)
     wm.castShadow = true
     pivot.add(wm)
@@ -231,11 +260,11 @@ function buildCar(car: Car): CarView {
 
     const rear = new THREE.Mesh(rearWheelGeo, rubberMat)
     rear.castShadow = true
-    rear.position.set(-L * 0.36, 0.4, side * (W * 0.5))
+    rear.position.set(-L * 0.4, 0.42, side * (W * 0.52))
     group.add(rear)
-    const rhub = new THREE.Mesh(hubGeo, hubMat)
-    rhub.position.copy(rear.position)
-    group.add(rhub)
+    const rim = new THREE.Mesh(rimGeo, hubMat)
+    rim.position.copy(rear.position)
+    group.add(rim)
     wheels.push(rear)
   }
 
@@ -247,9 +276,9 @@ function makeDustTexture(): THREE.CanvasTexture {
   c.width = c.height = 64
   const ctx = c.getContext('2d')!
   const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32)
-  g.addColorStop(0, 'rgba(210,180,140,0.8)')
-  g.addColorStop(0.5, 'rgba(200,170,130,0.35)')
-  g.addColorStop(1, 'rgba(190,160,120,0)')
+  g.addColorStop(0, 'rgba(225,210,185,0.8)')
+  g.addColorStop(0.5, 'rgba(215,200,175,0.35)')
+  g.addColorStop(1, 'rgba(205,190,165,0)')
   ctx.fillStyle = g
   ctx.fillRect(0, 0, 64, 64)
   return new THREE.CanvasTexture(c)
@@ -302,7 +331,7 @@ export class Scene3D {
       side: THREE.BackSide,
       depthWrite: false,
       uniforms: {
-        top: { value: new THREE.Color(0x4a8fd9) },
+        top: { value: new THREE.Color(0x5f9ad8) },
         horizon: { value: new THREE.Color(0xd8e6ee) },
       },
       vertexShader: `varying vec3 vPos; void main(){ vPos = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
@@ -333,7 +362,7 @@ export class Scene3D {
 
   private buildGround() {
     // Campo seco mendocino alrededor.
-    const tex = makeNoiseTexture(256, [150, 132, 88], 0.55, false)
+    const tex = makeNoiseTexture(256, [128, 104, 78], 0.5, false)
     tex.repeat.set(160, 160)
     const ground = new THREE.Mesh(
       new THREE.PlaneGeometry(2400, 2400),
@@ -382,10 +411,10 @@ export class Scene3D {
       m.receiveShadow = true
       return m
     }
-    const shoulderTex = makeNoiseTexture(256, [176, 150, 104], 0.4, false)
+    const shoulderTex = makeNoiseTexture(256, [96, 74, 54], 0.5, false)
     shoulderTex.repeat.set(1, 60)
     this.scene.add(makeRibbon(half + 4, 0.01, new THREE.MeshStandardMaterial({ map: shoulderTex, roughness: 1 }), 60))
-    const dirtTex = makeNoiseTexture(256, [128, 98, 66], 0.5, true)
+    const dirtTex = makeNoiseTexture(256, [196, 180, 150], 0.28, true)
     dirtTex.repeat.set(1, 140)
     this.scene.add(makeRibbon(half, 0.03, new THREE.MeshStandardMaterial({ map: dirtTex, roughness: 0.95 }), 140))
 

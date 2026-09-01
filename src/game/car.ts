@@ -46,6 +46,7 @@ export class Car {
   readonly name: string
   readonly number: number
   readonly color: string
+  readonly cageColor: string
   readonly isPlayer: boolean
   readonly skill: number // 0..1, afecta a la IA
 
@@ -54,6 +55,7 @@ export class Car {
     name: string,
     number: number,
     color: string,
+    cageColor: string,
     isPlayer: boolean,
     skill: number,
     track: Track,
@@ -63,6 +65,7 @@ export class Car {
     this.name = name
     this.number = number
     this.color = color
+    this.cageColor = cageColor
     this.isPlayer = isPlayer
     this.skill = skill
     // Grilla: filas de a dos, 6 m entre filas, detrás de la largada.
