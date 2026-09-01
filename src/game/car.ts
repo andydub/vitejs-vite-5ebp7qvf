@@ -51,6 +51,7 @@ export class Car {
   readonly isPlayer: boolean
   /** Modelo 3D generado a partir de fotos; si falta se usa el auto procedural. */
   model: CarModelConfig | null = null
+  modelHue = 0 // rotación de matiz (grados) para reteñir el modelo compartido
   readonly skill: number // 0..1, afecta a la IA
 
   constructor(

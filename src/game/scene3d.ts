@@ -8,7 +8,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js'
 import { Lensflare, LensflareElement } from 'three/addons/objects/Lensflare.js'
 import { CAR_SPEC, type Car } from './car'
 import { Track } from './track'
-import { loadCarModel } from './models'
+import { applyHueShift, loadCarModel } from './models'
 
 // Convención: el mundo del juego es (x, y) en planta; en Three.js va a (x, 0, y).
 // Un rumbo θ (cos θ, sin θ) equivale a rotation.y = -θ con el auto mirando +X.
@@ -755,6 +755,7 @@ export class Scene3D {
     const cfg = car.model!
     loadCarModel(cfg)
       .then((model) => {
+        if (car.modelHue) applyHueShift(model, cfg.key, car.modelHue)
         // Ocultar carrocería y ruedas procedurales; conservar sombra de contacto y polvo.
         view.body.visible = false
         for (const fw of view.frontWheels) fw.visible = false
@@ -1479,7 +1480,7 @@ export class Scene3D {
       desired = new THREE.Vector3(player.x - fx * 16, 9, player.y - fz * 16)
       look = new THREE.Vector3(player.x + fx * 8, 0.5, player.y + fz * 8)
     } else if (this.cameraMode === 'hood') {
-      desired = new THREE.Vector3(player.x + fx * 0.6, 1.25, player.y + fz * 0.6)
+      desired = new THREE.Vector3(player.x - fx * 0.3, 1.55, player.y - fz * 0.3)
       look = new THREE.Vector3(player.x + fx * 30, 1.0, player.y + fz * 30)
     } else {
       const back = 7.5 + player.speed * 0.06

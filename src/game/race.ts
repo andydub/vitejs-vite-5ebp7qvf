@@ -1,18 +1,18 @@
 import { aiControls } from './ai'
 import { Car, resolveCollisions, type Controls } from './car'
 import { Track } from './track'
-import { CAR_MODELS, type CarModelConfig } from './models'
+import { CAR_MODELS, hueOf, type CarModelConfig } from './models'
 
 export type RacePhase = 'countdown' | 'racing' | 'finished'
 
-// Liveries inspirados en fotos de la categoría: el 2 magenta y negro, el 29
-// azul de YPF y el 1 de aluminio con jaula azul.
-const RIVALS: { name: string; number: number; color: string; cage: string; skill: number; model?: CarModelConfig }[] = [
-  { name: 'MG Racing', number: 1, color: '#c9ccd1', cage: '#1f5fd6', skill: 0.95, model: CAR_MODELS.car1 },
-  { name: 'Schiavone', number: 29, color: '#1d5bd8', cage: '#dcdcdc', skill: 0.92, model: CAR_MODELS.car29 },
-  { name: 'H. Álvarez', number: 2, color: '#c8189a', cage: '#111111', skill: 0.88 },
-  { name: 'M. Daniele', number: 7, color: '#f26b21', cage: '#222222', skill: 0.82 },
-  { name: 'R. Majstruk', number: 21, color: '#2fbf71', cage: '#222222', skill: 0.76 },
+// Liveries inspirados en fotos de la categoría. Los modelos 3D reales (29 y 1)
+// se reparten entre todos los autos; los demás se retiñen al color del equipo.
+const RIVALS: { name: string; number: number; color: string; cage: string; skill: number; model?: CarModelConfig; retint: boolean }[] = [
+  { name: 'MG Racing', number: 1, color: '#c9ccd1', cage: '#1f5fd6', skill: 0.95, model: CAR_MODELS.car1, retint: false },
+  { name: 'Schiavone', number: 29, color: '#1d5bd8', cage: '#dcdcdc', skill: 0.92, model: CAR_MODELS.car29, retint: false },
+  { name: 'H. Álvarez', number: 2, color: '#c8189a', cage: '#111111', skill: 0.88, model: CAR_MODELS.car29, retint: true },
+  { name: 'M. Daniele', number: 7, color: '#f26b21', cage: '#222222', skill: 0.82, model: CAR_MODELS.car1, retint: true },
+  { name: 'R. Majstruk', number: 21, color: '#2fbf71', cage: '#222222', skill: 0.76, model: CAR_MODELS.car29, retint: true },
 ]
 
 export class Race {
@@ -34,9 +34,12 @@ export class Race {
     RIVALS.forEach((r, i) => {
       const car = new Car(i, r.name, r.number, r.color, r.cage, false, r.skill, this.track, i)
       car.model = r.model ?? null
+      if (r.model && r.retint) car.modelHue = hueOf(r.color) - r.model.baseHue
       cars.push(car)
     })
     this.player = new Car(RIVALS.length, playerName, 99, '#ffd500', '#111111', true, 1, this.track, RIVALS.length)
+    this.player.model = CAR_MODELS.car1 ?? null
+    if (this.player.model) this.player.modelHue = hueOf('#ffd500') - this.player.model.baseHue
     cars.push(this.player)
     this.cars = cars
     this.aiBias = cars.map((_, i) => ((i % 2 === 0 ? -1 : 1) * (1.2 + (i % 3) * 0.6)))
