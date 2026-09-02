@@ -37,10 +37,21 @@ Abrir la URL que muestra Vite (por defecto http://localhost:5173).
 - `src/game/ai.ts`: pilotos rivales que siguen la línea central y regulan la
   velocidad según la curvatura que viene.
 - `src/game/race.ts`: grilla, largada, clasificación y fin de carrera.
-- `src/game/scene3d.ts`: escena Three.js (pista de tierra, cubiertas,
-  alambrado, tribuna, torre, álamos, cordillera, autos, polvo, cámaras).
+- `src/game/scene3d.ts`: escena Three.js (pista de tierra con borde
+  deshilachado sobre las bermas, piedras, pasto seco, carteles de frenaje,
+  cubiertas, alambrado, terraplén, torre, álamos, cordillera, autos, polvo,
+  cámaras).
+- `src/game/crowd.ts`: público. Figuras humanas instanciadas (piernas, torso,
+  brazos con antebrazo, cabeza con cara, pelo o gorra) con posturas variadas;
+  caminan por el terraplén y salen corriendo si un auto se va contra ellos
+  (`updateCrowd` en `scene3d.ts`).
 - `src/game/audio.ts`: motor sintetizado con Web Audio.
 - `src/App.tsx`: menú, HUD, minimapa y resultados.
+
+## Pruebas automatizadas
+
+Durante la carrera, `window.__sport4` expone `{ race, scene }` para
+teletransportar autos o cambiar la cámara desde Playwright o la consola.
 
 ## Pendiente
 

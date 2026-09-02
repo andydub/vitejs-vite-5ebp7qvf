@@ -6,8 +6,10 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js'
 import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js'
 import { Lensflare, LensflareElement } from 'three/addons/objects/Lensflare.js'
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { CAR_SPEC, type Car } from './car'
-import { Track } from './track'
+import { BERM_PROFILE, Track } from './track'
+import { CrowdPeople, HAIR_COLORS, SKIN_TONES, type Person, type Pose } from './crowd'
 import { applyHueShift, loadCarModel, WHEEL_NAMES } from './models'
 import { buildWheel } from './wheel'
 
@@ -67,9 +69,18 @@ function canvasTexture(canvas: HTMLCanvasElement, repeat = true): THREE.CanvasTe
   return tex
 }
 
-/** Textura de la pista: tierra compactada clara con huellas, piedritas y manchas secas. U cruza la pista, V va a lo largo. */
-function makeTrackTexture(): THREE.CanvasTexture {
-  const w = 512
+/** Cuánto sobresale la textura de pista sobre la berma a cada lado (m): ahí se deshilacha. */
+const TRACK_OVERHANG = 1.5
+
+/**
+ * Textura de la pista: tierra compactada clara con huellas, piedritas y manchas
+ * secas. U cruza la pista (incluido el sobrante sobre las bermas), V va a lo
+ * largo. El borde no es una línea: la tierra compactada se va deshaciendo en
+ * terrones y lenguas irregulares sobre la tierra suelta, y el canal alfa
+ * recorta esas lenguas (se usa con alphaTest).
+ */
+function makeTrackTexture(trackWidth: number): THREE.CanvasTexture {
+  const w = 640
   const h = 2048
   const canvas = document.createElement('canvas')
   canvas.width = w
@@ -78,10 +89,18 @@ function makeTrackTexture(): THREE.CanvasTexture {
   const img = ctx.createImageData(w, h)
   const noise = makeNoise2D(7)
   const noise2 = makeNoise2D(19)
+  const noise3 = makeNoise2D(43)
   const rnd = makeRng(31)
+  const totalW = trackWidth + TRACK_OVERHANG * 2
+  const half = trackWidth / 2
   for (let y = 0; y < h; y++) {
+    // Dónde termina realmente la tierra compactada en esta fila (m más allá del
+    // borde nominal), distinto a cada lado y ondulante a lo largo.
+    const edgeL = -0.25 + noise3(3, y / 55, 3) * 1.1 + (noise3(9, y / 12, 2) - 0.5) * 0.3
+    const edgeR = -0.25 + noise3(71, y / 55, 3) * 1.1 + (noise3(77, y / 12, 2) - 0.5) * 0.3
     for (let x = 0; x < w; x++) {
-      const u = x / w
+      const m = (x / w - 0.5) * totalW // metros desde el eje
+      const u = (m + half) / trackWidth // 0..1 sobre la pista nominal
       const big = noise(x / 160, y / 160, 3) // manchas grandes (zonas más secas o más húmedas)
       const mid = noise(x / 36, y / 36, 4)
       const fine = noise2(x / 7, y / 7, 2)
@@ -90,28 +109,48 @@ function makeTrackTexture(): THREE.CanvasTexture {
       const rutA = Math.exp(-(((u - 0.31 - wobble) / 0.075) ** 2))
       const rutB = Math.exp(-(((u - 0.69 + wobble) / 0.075) ** 2))
       const rut = (rutA + rutB) * (0.75 + 0.25 * noise2(x / 50, y / 90, 2))
-      // Centro entre huellas algo más claro (tierra que se acumula) y bordes sueltos oscuros.
+      // Centro entre huellas algo más claro (tierra que se acumula).
       const crown = Math.exp(-(((u - 0.5) / 0.09) ** 2)) * 0.05
-      const edge = Math.max(0, 1 - Math.min(u, 1 - u) / 0.09)
-      let k = 0.96 + (big - 0.5) * 0.22 + (mid - 0.5) * 0.28 + (fine - 0.5) * 0.16 - rut * 0.2 - edge * 0.3 + crown
+      // Distancia al borde nominal (m; positivo = ya sobre la berma) y al borde real.
+      const e = Math.abs(m) - half
+      const edge = m < 0 ? edgeL : edgeR
+      const past = e - edge
+      // Cerca del borde la tierra está suelta: más oscura, más granulosa, con
+      // cordón de tierra barrida por las ruedas ("marbles") justo afuera de la huella.
+      const loose = Math.min(1, Math.max(0, (past + 1.4) / 1.8))
+      const grain = (noise2(x / 3.2, y / 3.2, 1) - 0.5) * 0.5 * loose
+      const clods = noise3(x / 9, y / 9, 3)
+      const clod = loose > 0.3 && clods > 0.6 ? 0.14 : 0
+      const marbles = Math.exp(-(((past + 0.9) / 0.35) ** 2)) * 0.12
+      let k = 0.96 + (big - 0.5) * 0.22 + (mid - 0.5) * 0.28 + (fine - 0.5) * 0.16 - rut * 0.2 + crown - loose * 0.28 + grain + clod - marbles
       // Estrías longitudinales finas (rastro de cubiertas) y piedritas.
       k += 0.025 * Math.sin(x * 1.7 + Math.sin(y * 0.03) * 4)
       const stone = rnd()
       if (stone > 0.9965) k += 0.28
       else if (stone < 0.002) k -= 0.3
-      // Tinte: más rojizo en las zonas oscuras, más gris en las claras.
-      const r = (196 + (k - 1) * 40) * k
-      const g = (176 + (k - 1) * 20) * k
-      const b = (144 - (k - 1) * 10) * k
+      // Tinte: más rojizo en las zonas oscuras y sueltas, más gris en las claras.
+      const r = (196 + (k - 1) * 40 - loose * 18) * k
+      const g = (176 + (k - 1) * 20 - loose * 30) * k
+      const b = (144 - (k - 1) * 10 - loose * 40) * k
+      // Alfa: sólido hasta el borde real; después, lenguas y terrones sueltos
+      // que se van espaciando hasta desaparecer.
+      let a = 255
+      if (past > 0) {
+        const t = past / 1.1
+        const blob = clods * 0.75 + fine * 0.25
+        a = blob > 0.42 + t * 0.5 ? 255 : 0
+      }
       const i = (y * w + x) * 4
       img.data[i] = Math.max(0, Math.min(255, r))
       img.data[i + 1] = Math.max(0, Math.min(255, g))
       img.data[i + 2] = Math.max(0, Math.min(255, b))
-      img.data[i + 3] = 255
+      img.data[i + 3] = a
     }
   }
   ctx.putImageData(img, 0, 0)
-  return canvasTexture(canvas)
+  const tex = canvasTexture(canvas)
+  tex.premultiplyAlpha = false
+  return tex
 }
 
 /** Textura de la tierra suelta de las bermas: terrones, piedras y polvo. */
@@ -214,7 +253,7 @@ function makeGroundTexture(track: Track, size: number, center: THREE.Vector2, gr
   track.points.forEach((p, i) => {
     const nx = -Math.sin(p.heading)
     const ny = Math.cos(p.heading)
-    const outward = track.outwardAt(i)
+    const outward = track.outwardAt()
     const off = half + 22
     const [px, py] = toPx(p.x + nx * off * outward, p.y + ny * off * outward)
     if (i === 0) ctx.moveTo(px, py)
@@ -1007,8 +1046,9 @@ export class Scene3D {
   private smoke: THREE.Sprite[] = []
   private flags: THREE.Mesh[] = []
   private mangrulloPos = new THREE.Vector3()
-  private walkers: { index: number; x: number; z: number; y0: number; h: number; shirt: number; pants: number; cap: number; dx: number; dz: number; amp: number; speed: number; phase: number }[] = []
+  private people: Person[] = []
   private crowd: CrowdPeople | null = null
+  private fleeing = 0 // cuántos espectadores están corriendo (para la lógica y el sonido)
   private time = 0
   cameraMode: CameraMode = 'chase'
 
@@ -1029,7 +1069,7 @@ export class Scene3D {
     const s0 = track.points[0]
     const nx = -Math.sin(s0.heading)
     const ny = Math.cos(s0.heading)
-    const outward = track.outwardAt(0)
+    const outward = track.outwardAt()
     const off = track.width / 2 + 75
     this.paddock = {
       cx: s0.x + Math.cos(s0.heading) * 60 + nx * off * outward,
@@ -1232,7 +1272,7 @@ export class Scene3D {
   }
 
   /** Cinta a lo largo de la pista con perfil transversal arbitrario (offsets, alturas). */
-  private ribbon(profile: { off: number; y: number }[], mat: THREE.Material, vRepeat: number): THREE.Mesh {
+  private ribbon(profile: { off: number; y: number; u?: number }[], mat: THREE.Material, vRepeat: number): THREE.Mesh {
     const t = this.track
     const n = t.points.length
     const cols = profile.length
@@ -1248,7 +1288,7 @@ export class Scene3D {
         pos[o] = p.x + nx * profile[c].off
         pos[o + 1] = profile[c].y
         pos[o + 2] = p.y + ny * profile[c].off
-        uv[(i * cols + c) * 2] = c / (cols - 1)
+        uv[(i * cols + c) * 2] = profile[c].u ?? c / (cols - 1)
         uv[(i * cols + c) * 2 + 1] = (i / n) * vRepeat
       }
       if (i < n) {
@@ -1269,18 +1309,39 @@ export class Scene3D {
     return m
   }
 
+  /** Altura de la berma a `d` metros del borde de pista (interpolando el perfil). */
+  private bermHeight(d: number): number {
+    const prof = BERM_PROFILE
+    if (d <= prof[0].off) return prof[0].y
+    for (let i = 0; i < prof.length - 1; i++) {
+      const a = prof[i]
+      const b = prof[i + 1]
+      if (d >= a.off && d <= b.off) return a.y + ((b.y - a.y) * (d - a.off)) / (b.off - a.off)
+    }
+    return 0
+  }
+
   private buildTrack() {
     const t = this.track
     const half = t.width / 2
-    const trackTex = makeTrackTexture()
+    const totalW = t.width + TRACK_OVERHANG * 2
+    const trackTex = makeTrackTexture(t.width)
     trackTex.repeat.set(1, 1)
-    this.scene.add(
-      this.ribbon(
-        [{ off: -half, y: 0.04 }, { off: half, y: 0.04 }],
-        new THREE.MeshStandardMaterial({ map: trackTex, roughness: 0.95, bumpMap: trackTex, bumpScale: 0.2 }),
-        26,
-      ),
-    )
+    // La cinta de tierra compactada sobresale sobre las bermas y se recorta con
+    // alfa: el borde queda irregular y con terrones sueltos. Sigue el perfil
+    // de la berma apenas por encima para no pelear en profundidad.
+    const ov = TRACK_OVERHANG
+    const uAt = (off: number) => (off + totalW / 2) / totalW
+    const cols: { off: number; y: number; u: number }[] = []
+    for (const off of [-half - ov, -half - ov * 0.5, -half, half, half + ov * 0.5, half + ov]) {
+      const d = Math.abs(off) - half
+      const y = d <= 0 ? 0.04 : this.bermHeight(d) + 0.012 + d * 0.012
+      cols.push({ off, y, u: uAt(off) })
+    }
+    const trackMat = new THREE.MeshStandardMaterial({ map: trackTex, roughness: 0.95, bumpMap: trackTex, bumpScale: 0.2, alphaTest: 0.5 })
+    const trackMesh = this.ribbon(cols, trackMat, 26)
+    trackMesh.renderOrder = 1
+    this.scene.add(trackMesh)
 
     // Bermas: lomo de tierra suelta a cada lado, más alto en el exterior de las curvas.
     const loose = makeLooseDirtTexture()
@@ -1289,17 +1350,13 @@ export class Scene3D {
     for (const side of [-1, 1]) {
       this.scene.add(
         this.ribbon(
-          [
-            { off: side * (half - 0.2), y: 0.03 },
-            { off: side * (half + 1.6), y: 0.42 },
-            { off: side * (half + 3.2), y: 0.28 },
-            { off: side * (half + 6), y: 0.0 },
-          ],
+          BERM_PROFILE.map((p) => ({ off: side * (half + p.off), y: p.y })),
           looseMat,
           320,
         ),
       )
     }
+    this.buildTrackDressing()
 
     // Línea de largada pintada y arco de largada.
     const s0 = t.points[0]
@@ -1360,6 +1417,125 @@ export class Scene3D {
     }
   }
 
+  /**
+   * Detalles al borde de la pista: piedras sueltas sobre las bermas, matas de
+   * pasto seco en la contrapendiente y carteles de frenaje (100 / 50 m) antes
+   * de las curvas cerradas.
+   */
+  private buildTrackDressing() {
+    const t = this.track
+    const half = t.width / 2
+    const n = t.points.length
+    const rnd = makeRng(913)
+    const at = (i: number, off: number) => {
+      const p = t.pointAtF(i)
+      return { x: p.x - Math.sin(p.heading) * off, z: p.y + Math.cos(p.heading) * off, heading: p.heading }
+    }
+
+    // Piedras: dodecaedros chicos, aplastados y girados al azar; más densas cerca del lomo.
+    const stoneGeo = new THREE.DodecahedronGeometry(0.075, 0)
+    const stones: THREE.Matrix4[] = []
+    const stoneColors: number[] = []
+    const stonePalette = [0xb9a48a, 0x9c8a72, 0xc9b79a, 0x8a7a68, 0xa38e74, 0xd2c2a8]
+    for (let i = 0; i < n; i += 1) {
+      for (const side of [-1, 1]) {
+        if (rnd() > 0.55) continue
+        const d = 0.3 + rnd() ** 1.6 * 6.2
+        const q = at(i + rnd(), side * (half + d))
+        const sc = 0.45 + rnd() * 1.1
+        stones.push(
+          new THREE.Matrix4().compose(
+            new THREE.Vector3(q.x, this.bermHeight(d) + 0.02 * sc, q.z),
+            new THREE.Quaternion().setFromEuler(new THREE.Euler(rnd() * 3, rnd() * 3, rnd() * 3)),
+            new THREE.Vector3(sc * (0.8 + rnd() * 0.5), sc * (0.5 + rnd() * 0.4), sc * (0.8 + rnd() * 0.5)),
+          ),
+        )
+        stoneColors.push(stonePalette[Math.floor(rnd() * stonePalette.length)])
+      }
+    }
+    const stoneMesh = new THREE.InstancedMesh(stoneGeo, new THREE.MeshStandardMaterial({ roughness: 0.95 }), stones.length)
+    stones.forEach((m, i) => {
+      stoneMesh.setMatrixAt(i, m)
+      stoneMesh.setColorAt(i, new THREE.Color(stoneColors[i]))
+    })
+    stoneMesh.castShadow = true
+    this.scene.add(stoneMesh)
+
+    // Pasto seco: dos planos cruzados con una mata dibujada, recortada con alfa.
+    const tuftCanvas = document.createElement('canvas')
+    tuftCanvas.width = tuftCanvas.height = 128
+    const tc = tuftCanvas.getContext('2d')!
+    tc.clearRect(0, 0, 128, 128)
+    tc.lineCap = 'round'
+    for (let k = 0; k < 26; k++) {
+      const shade = 150 + rnd() * 60
+      tc.strokeStyle = `rgb(${shade * 0.92}, ${shade * 0.8}, ${shade * 0.42})`
+      tc.lineWidth = 1.5 + rnd() * 2
+      tc.beginPath()
+      tc.moveTo(56 + rnd() * 16, 128)
+      const tx = 8 + rnd() * 112
+      const ty = 6 + rnd() * 60
+      tc.quadraticCurveTo(64 + (tx - 64) * 0.35, 70 + rnd() * 30, tx, ty)
+      tc.stroke()
+    }
+    const tuftTex = new THREE.CanvasTexture(tuftCanvas)
+    tuftTex.colorSpace = THREE.SRGBColorSpace
+    const plane = new THREE.PlaneGeometry(0.7, 0.55)
+    plane.translate(0, 0.26, 0)
+    const plane2 = plane.clone().rotateY(Math.PI / 2)
+    const tuftGeo = mergeGeometries([plane, plane2], false)
+    const tufts: THREE.Matrix4[] = []
+    for (let i = 0; i < n; i += 1) {
+      for (const side of [-1, 1]) {
+        if (rnd() > 0.5) continue
+        const d = 3.4 + rnd() * 5.8
+        const q = at(i + rnd(), side * (half + d))
+        const sc = 0.6 + rnd() * 0.9
+        tufts.push(
+          new THREE.Matrix4().compose(
+            new THREE.Vector3(q.x, this.bermHeight(d) - 0.02, q.z),
+            new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), rnd() * Math.PI),
+            new THREE.Vector3(sc, sc * (0.8 + rnd() * 0.5), sc),
+          ),
+        )
+      }
+    }
+    const tuftMesh = new THREE.InstancedMesh(tuftGeo, new THREE.MeshStandardMaterial({ map: tuftTex, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 1 }), tufts.length)
+    tufts.forEach((m, i) => tuftMesh.setMatrixAt(i, m))
+    this.scene.add(tuftMesh)
+
+    // Carteles de frenaje: 100 y 50 m antes de cada curva cerrada, del lado de afuera.
+    const boardMats = [100, 50].map((m) => new THREE.MeshStandardMaterial({ map: makeBannerTexture(String(m), '#ffffff', '#111111', 256, 192), side: THREE.DoubleSide, roughness: 0.8 }))
+    const boardGeo = new THREE.PlaneGeometry(1.0, 0.75)
+    const postGeo = new THREE.CylinderGeometry(0.04, 0.04, 1.3, 6)
+    const postMat = new THREE.MeshStandardMaterial({ color: 0x888888, metalness: 0.5 })
+    let straight = 0
+    for (let i = 0; i < n * 2; i++) {
+      const p = t.pointAt(i)
+      const c = Math.abs(p.curvature)
+      if (c < 0.012) {
+        straight++
+        continue
+      }
+      if (c > 0.02 && straight > 90 && i >= n) {
+        const side = Math.sign(p.curvature)
+        for (let k = 0; k < 2; k++) {
+          const q = at(i - (k ? 50 : 100), -side * (half + 7.5))
+          const post = new THREE.Mesh(postGeo, postMat)
+          post.position.set(q.x, 0.65, q.z)
+          post.castShadow = true
+          this.scene.add(post)
+          const board = new THREE.Mesh(boardGeo, boardMats[k])
+          board.position.set(q.x, 1.55, q.z)
+          board.rotation.y = -q.heading + Math.PI / 2
+          board.castShadow = true
+          this.scene.add(board)
+        }
+      }
+      straight = 0
+    }
+  }
+
   private buildSurroundings() {
     const t = this.track
     const half = t.width / 2
@@ -1368,7 +1544,7 @@ export class Scene3D {
     const cxm = this.center.x
     const cym = this.center.y
     // Lado exterior del circuito (alambrado, terraplén y público van afuera).
-    const outwardAt = (_p: { x: number; y: number; heading: number }) => t.outwardAt(0)
+    const outwardAt = () => t.outwardAt()
 
     // --- Terraplén perimetral donde se instala el público ---
     const embankMat = new THREE.MeshStandardMaterial({ map: makeLooseDirtTexture(), roughness: 1, side: THREE.DoubleSide })
@@ -1384,9 +1560,8 @@ export class Scene3D {
       const mesh = this.ribbon(embankProfile(side), embankMat, 300)
       // Ocultar los tramos donde ese lado es el interior: se colapsa la altura.
       const pos = mesh.geometry.getAttribute('position') as THREE.BufferAttribute
-      for (let i = 0; i <= n; i++) {
-        const p = t.pointAt(i)
-        if (outwardAt(p) !== side) {
+      if (outwardAt() !== side) {
+        for (let i = 0; i <= n; i++) {
           for (let c = 0; c < 4; c++) pos.setY(i * 4 + c, -0.5)
         }
       }
@@ -1415,7 +1590,7 @@ export class Scene3D {
       const p = t.points[i]
       const nx = -Math.sin(p.heading)
       const ny = Math.cos(p.heading)
-      const outward = outwardAt(p)
+      const outward = outwardAt()
       const off = half + 9.5
       const px = p.x + nx * off * outward
       const py = p.y + ny * off * outward
@@ -1448,14 +1623,14 @@ export class Scene3D {
       color: number
     }
     const placements: Placement[] = []
-    const people: { x: number; y: number; y0: number; color: number; rot: number; walk?: { dx: number; dz: number; amp: number; speed: number; phase: number } }[] = []
+    const people: { x: number; y: number; y0: number; color: number; rot: number; fixed?: boolean; walk?: { dx: number; dz: number; amp: number; speed: number; phase: number } }[] = []
     const grills: { x: number; y: number; y0: number }[] = []
     const flags: { x: number; y: number; y0: number; color: number; text?: string }[] = []
     const ringSpot = (i: number, extra: number) => {
       const p = t.points[i]
       const nx = -Math.sin(p.heading)
       const ny = Math.cos(p.heading)
-      const outward = outwardAt(p)
+      const outward = outwardAt()
       const off = half + 19 + extra
       return { x: p.x + nx * off * outward, y: p.y + ny * off * outward, heading: p.heading, outward, nx, ny }
     }
@@ -1516,7 +1691,7 @@ export class Scene3D {
         const fx = Math.cos(-rot)
         const fz = Math.sin(-rot)
         for (let g = 0; g < 3; g++) {
-          people.push({ x: spot.x - fx * 1.2 + (rnd() - 0.5) * 4, y: spot.y - fz * 1.2 + (rnd() - 0.5) * 1.2, y0: EMB_Y + 2.9, color: [0xffffff, 0x1f2a44, 0x8c1d1d, 0xf2c94c][g % 4], rot })
+          people.push({ x: spot.x - fx * 1.2 + (rnd() - 0.5) * 4, y: spot.y - fz * 1.2 + (rnd() - 0.5) * 1.2, y0: EMB_Y + 2.9, color: [0xffffff, 0x1f2a44, 0x8c1d1d, 0xf2c94c][g % 4], rot, fixed: true })
         }
       }
       if (rnd() < 0.35) grills.push({ x: spot.x + Math.cos(spot.heading) * 3.5, y: spot.y + Math.sin(spot.heading) * 3.5, y0: EMB_Y })
@@ -1652,17 +1827,53 @@ export class Scene3D {
     allVehicleWheels.forEach((m, i) => vWheels.setMatrixAt(i, m))
     this.scene.add(vWheels)
 
-    // Público: figuras por partes (piernas, torso, brazos, cabeza y gorra),
-    // con ropa de colores; algunos caminan por el terraplén.
+    // Público: figuras humanas instanciadas (ver crowd.ts) con ropa, piel y
+    // pelo variados y distintas posturas; algunos caminan por el terraplén y
+    // todos salen corriendo si un auto se va contra el terraplén.
     const crowd = new CrowdPeople(people.length)
     this.crowd = crowd
     this.scene.add(crowd.group)
-    people.forEach((pp, i) => {
-      const h = 0.9 + rnd() * 0.25
-      const pants = [0x2a3a66, 0x111111, 0x8a7a5a, 0x3a3a3a, 0x5a6a8a][Math.floor(rnd() * 5)]
-      const cap = rnd() < 0.5 ? [0x111111, 0xd42020, 0xffffff, 0x1f5fd6][Math.floor(rnd() * 4)] : -1
-      crowd.setPerson(i, pp.x, pp.y0, pp.y, pp.rot, h, pp.color, pants, cap, 0)
-      if (pp.walk) this.walkers.push({ index: i, x: pp.x, z: pp.y, y0: pp.y0, h, shirt: pp.color, pants, cap, ...pp.walk })
+    const shirtPalette = [0xffffff, 0x1f2a44, 0x8c1d1d, 0x2a7f3a, 0xf2c94c, 0x222222, 0x5b8fd6, 0x74acdf, 0xd42020, 0xe8e2cf, 0x6a4a8a, 0xf28c28]
+    const pantsPalette = [0x2a3a66, 0x111111, 0x8a7a5a, 0x3a3a3a, 0x5a6a8a, 0x1d2b4f, 0x6e5a44]
+    const capPalette = [0x111111, 0xd42020, 0xffffff, 0x1f5fd6, 0x2a7f3a, 0xf2c94c]
+    this.people = people.map((pp, i) => {
+      const kid = !pp.fixed && rnd() < 0.1
+      const h = kid ? 0.55 + rnd() * 0.15 : 0.92 + rnd() * 0.22
+      const r = rnd()
+      const pose: Pose = pp.walk ? 'down' : r < 0.42 ? 'down' : r < 0.62 ? 'crossed' : r < 0.78 ? 'hips' : r < 0.9 ? 'phone' : 'cheer'
+      const person: Person = {
+        hx: pp.x,
+        hz: pp.y,
+        hy: pp.y0,
+        hrot: pp.rot,
+        x: pp.x,
+        z: pp.y,
+        y: pp.y0,
+        rot: pp.rot,
+        h,
+        build: kid ? 0.8 : 0.85 + rnd() * 0.35,
+        shirt: rnd() < 0.7 ? pp.color : shirtPalette[Math.floor(rnd() * shirtPalette.length)],
+        pants: pantsPalette[Math.floor(rnd() * pantsPalette.length)],
+        skin: SKIN_TONES[Math.floor(rnd() * SKIN_TONES.length)],
+        hair: HAIR_COLORS[Math.floor(rnd() * HAIR_COLORS.length)],
+        hairLong: rnd() < 0.3,
+        cap: rnd() < 0.45 ? capPalette[Math.floor(rnd() * capPalette.length)] : -1,
+        sleeves: rnd() < 0.35,
+        pose,
+        fixed: !!pp.fixed,
+        swing: 0,
+        lean: 0,
+        wave: 0.6 + rnd() * 0.4,
+        mode: pp.walk ? 'walk' : 'idle',
+        walk: pp.walk,
+        vx: 0,
+        vz: 0,
+        timer: 0,
+        hint: t.nearestIndex(pp.x, pp.y),
+        dirty: true,
+      }
+      crowd.setPerson(i, person, 0)
+      return person
     })
     crowd.commit()
 
@@ -1774,7 +1985,7 @@ export class Scene3D {
     // el banner de ACT, piso superior con baranda y gente con micrófono, y el
     // podio adelante.
     const s0 = t.points[0]
-    const outward0 = outwardAt(s0)
+    const outward0 = outwardAt()
     const tnx = -Math.sin(s0.heading)
     const tny = Math.cos(s0.heading)
     const mang = new THREE.Group()
@@ -2057,7 +2268,7 @@ export class Scene3D {
     const idxB = n - 430 + 428 * uB
     const pB = this.track.pointAtF(idxB)
     const aB = this.track.pointAtF(idxB + 24)
-    const sideB = -this.track.outwardAt(Math.round(idxB))
+    const sideB = -this.track.outwardAt()
     const nxB = -Math.sin(pB.heading)
     const nyB = Math.cos(pB.heading)
     const flyPos = new THREE.Vector3(pB.x + nxB * 4.5 * sideB, this.track.groundHeight(pB.x, pB.y) + 3.0, pB.y + nyB * 4.5 * sideB)
@@ -2069,7 +2280,7 @@ export class Scene3D {
     const pC = this.track.pointAtF(idxC)
     const nxC = -Math.sin(pC.heading)
     const nyC = Math.cos(pC.heading)
-    const sideC = -this.track.outwardAt(Math.round(idxC))
+    const sideC = -this.track.outwardAt()
     const dollyPos = new THREE.Vector3(pC.x + nxC * 8.5 * sideC, this.track.groundHeight(pC.x, pC.y) + 1.35, pC.y + nyC * 8.5 * sideC)
     const pC2 = this.track.pointAtF(idxC + 1.5)
     const dollyLook = new THREE.Vector3(pC2.x - nxC * 1.5 * sideC, 0.75, pC2.y - nyC * 1.5 * sideC)
@@ -2119,7 +2330,7 @@ export class Scene3D {
       v.group.rotation.y = -c.heading
     }
     for (const f of this.flags) f.rotation.y = Math.sin(this.time * 2 + (f.userData.phase as number)) * 0.25
-    this.updateWalkers()
+    this.updateCrowd(cars, dt)
     for (const sp of this.smoke) {
       const a = (this.time * 0.18 + (sp.userData.phase as number)) % 1
       const base = sp.userData.base as THREE.Vector3
@@ -2156,7 +2367,7 @@ export class Scene3D {
       v.group.rotation.y = -c.heading
     }
     for (const f of this.flags) f.rotation.y = Math.sin(this.time * 2 + (f.userData.phase as number)) * 0.25
-    this.updateWalkers()
+    this.updateCrowd(cars, dt)
     for (const sp of this.smoke) {
       const a = (this.time * 0.18 + (sp.userData.phase as number)) % 1
       const base = sp.userData.base as THREE.Vector3
@@ -2194,7 +2405,7 @@ export class Scene3D {
       f.rotation.y = Math.sin(this.time * 2 + (f.userData.phase as number)) * 0.25
       f.rotation.z = Math.sin(this.time * 3.1 + (f.userData.phase as number)) * 0.08
     }
-    this.updateWalkers()
+    this.updateCrowd(cars, dt)
     for (const c of cars) {
       const v = this.views.get(c.id)!
       v.group.position.set(c.x, c.height, c.y)
@@ -2254,18 +2465,179 @@ export class Scene3D {
     this.composer.render()
   }
 
-  /** Gente que camina de un lado a otro por el terraplén. */
-  private updateWalkers() {
-    if (!this.crowd || this.walkers.length === 0) return
-    for (const w of this.walkers) {
-      const s = Math.sin(this.time * w.speed + w.phase)
-      const dirSign = Math.cos(this.time * w.speed + w.phase) >= 0 ? 1 : -1
-      const x = w.x + w.dx * w.amp * s
-      const z = w.z + w.dz * w.amp * s
-      const rot = -Math.atan2(w.dz * dirSign, w.dx * dirSign)
-      const swing = Math.sin(this.time * 7 + w.phase) * 0.5
-      this.crowd.setPerson(w.index, x, w.y0, z, rot, w.h, w.shirt, w.pants, w.cap, swing)
+  /** Cuántos espectadores están corriendo ahora mismo. */
+  get fleeingCount(): number {
+    return this.fleeing
+  }
+
+  /**
+   * Público: los que caminan van y vienen por el terraplén; si un auto se sale
+   * y viene hacia el terraplén, la gente cerca sale corriendo lejos de él,
+   * espera un rato y vuelve caminando a su lugar.
+   */
+  private updateCrowd(cars: Car[], dt: number) {
+    if (!this.crowd || this.people.length === 0) return
+    const t = this.track
+    const half = t.width / 2
+    const time = this.time
+    // Amenazas: autos fuera de la pista, bastante afuera y con velocidad.
+    const threats: { x: number; z: number; px: number; pz: number; ux: number; uz: number; r: number }[] = []
+    for (const c of cars) {
+      if (c.onAsphalt || c.speed < 5) continue
+      const d = Math.abs(t.lateralOffset(c.x, c.y, c.trackIndex)) - half
+      if (d < 2.5) continue
+      const vx = Math.cos(c.heading) * c.speed - Math.sin(c.heading) * c.lateralSpeed
+      const vz = Math.sin(c.heading) * c.speed + Math.cos(c.heading) * c.lateralSpeed
+      const sp = Math.hypot(vx, vz) || 1
+      threats.push({ x: c.x, z: c.y, px: c.x + vx * 1.3, pz: c.y + vz * 1.3, ux: vx / sp, uz: vz / sp, r: 13 + c.speed * 0.45 })
     }
+    let fleeing = 0
+    for (let i = 0; i < this.people.length; i++) {
+      const s = this.people[i]
+      if (s.fixed) continue
+      // ¿Hay que salir corriendo?
+      if (threats.length) {
+        for (const th of threats) {
+          const dn = Math.hypot(s.x - th.x, s.z - th.z)
+          const dp = Math.hypot(s.x - th.px, s.z - th.pz)
+          if (Math.min(dn, dp) < th.r) {
+            // Se apartan de la trayectoria del auto (hacia el costado) y un
+            // poco hacia adelante; si el auto ya pasó, directamente lejos de él.
+            const j = (Math.sin(i * 12.9898) * 43758.5453) % 1
+            const rx = s.x - th.x
+            const rz = s.z - th.z
+            const along = rx * th.ux + rz * th.uz
+            let ax: number
+            let az: number
+            if (along < -2) {
+              ax = rx
+              az = rz
+            } else {
+              ax = rx - along * th.ux
+              az = rz - along * th.uz
+              if (Math.hypot(ax, az) < 0.5) {
+                // Justo en la línea del auto: elige un costado.
+                const sg = j >= 0 ? 1 : -1
+                ax = -th.uz * sg
+                az = th.ux * sg
+              }
+              const l0 = Math.hypot(ax, az) || 1
+              ax = ax / l0 + th.ux * 0.35
+              az = az / l0 + th.uz * 0.35
+            }
+            const l = Math.hypot(ax, az) || 1
+            ax /= l
+            az /= l
+            const ang = (j - 0.5) * 0.7
+            const ca = Math.cos(ang)
+            const sa = Math.sin(ang)
+            const speed = (4.2 + Math.abs(j) * 2) * (0.6 + s.h * 0.4)
+            const nvx = (ax * ca - az * sa) * speed
+            const nvz = (ax * sa + az * ca) * speed
+            if (s.mode === 'flee') {
+              s.vx += (nvx - s.vx) * Math.min(1, dt * 4)
+              s.vz += (nvz - s.vz) * Math.min(1, dt * 4)
+            } else {
+              s.vx = nvx
+              s.vz = nvz
+            }
+            s.mode = 'flee'
+            s.timer = 1.6
+            break
+          }
+        }
+      }
+      switch (s.mode) {
+        case 'idle':
+          if (s.pose === 'cheer') {
+            s.dirty = true
+          }
+          break
+        case 'walk': {
+          const w = s.walk!
+          const ph = time * w.speed + w.phase
+          const sn = Math.sin(ph)
+          const dirSign = Math.cos(ph) >= 0 ? 1 : -1
+          s.x = s.hx + w.dx * w.amp * sn
+          s.z = s.hz + w.dz * w.amp * sn
+          s.rot = -Math.atan2(w.dz * dirSign, w.dx * dirSign)
+          s.swing = Math.sin(time * 7 + w.phase) * 0.5
+          s.dirty = true
+          break
+        }
+        case 'flee': {
+          fleeing++
+          s.timer -= dt
+          s.x += s.vx * dt
+          s.z += s.vz * dt
+          // No cruzan la pista ni se van más allá del terraplén.
+          const idx = t.nearestIndex(s.x, s.z, s.hint)
+          s.hint = idx
+          const lat = t.lateralOffset(s.x, s.z, idx)
+          const dd = Math.abs(lat) - half
+          if (dd < 9 || dd > 44) {
+            // Rebotan hacia los costados: siguen corriendo a lo largo del terraplén.
+            const p = t.pointAt(idx)
+            const fx = Math.cos(p.heading)
+            const fz = Math.sin(p.heading)
+            const along = s.vx * fx + s.vz * fz
+            const sp = Math.hypot(s.vx, s.vz)
+            const sg = along >= 0 ? 1 : -1
+            s.vx = fx * sg * sp
+            s.vz = fz * sg * sp
+          }
+          s.y = t.groundHeight(s.x, s.z, idx)
+          s.rot = -Math.atan2(s.vz, s.vx)
+          s.swing = Math.sin(time * 15 + i) * 1.0
+          s.lean = 0.3
+          s.dirty = true
+          if (s.timer <= 0) {
+            s.mode = 'wait'
+            s.timer = 1.5 + (i % 7) * 0.4
+            s.swing = 0
+            s.lean = 0
+            // Se dan vuelta a mirar qué pasó.
+            s.rot = -Math.atan2(-s.vz, -s.vx)
+          }
+          break
+        }
+        case 'wait':
+          s.timer -= dt
+          s.dirty = true
+          if (s.timer <= 0) s.mode = 'return'
+          break
+        case 'return': {
+          const dx = s.hx - s.x
+          const dz = s.hz - s.z
+          const dist = Math.hypot(dx, dz)
+          const sp = 1.4
+          if (dist < sp * dt + 0.05) {
+            s.x = s.hx
+            s.z = s.hz
+            s.y = s.hy
+            s.rot = s.hrot
+            s.swing = 0
+            s.lean = 0
+            s.mode = s.walk ? 'walk' : 'idle'
+          } else {
+            s.x += (dx / dist) * sp * dt
+            s.z += (dz / dist) * sp * dt
+            const idx = t.nearestIndex(s.x, s.z, s.hint)
+            s.hint = idx
+            s.y = t.groundHeight(s.x, s.z, idx)
+            s.rot = -Math.atan2(dz, dx)
+            s.swing = Math.sin(time * 7 + i) * 0.5
+          }
+          s.dirty = true
+          break
+        }
+      }
+      if (s.dirty) {
+        this.crowd.setPerson(i, s, time)
+        s.dirty = false
+      }
+    }
+    this.fleeing = fleeing
     this.crowd.commit()
   }
 
@@ -2419,87 +2791,6 @@ export class Scene3D {
   }
 }
 
-
-/**
- * Público por partes con instancias: piernas, torso, brazos, cabeza y gorra.
- * `setPerson` ubica una figura; `swing` balancea brazos y piernas al caminar.
- */
-class CrowdPeople {
-  readonly group = new THREE.Group()
-  private legs: THREE.InstancedMesh
-  private torso: THREE.InstancedMesh
-  private arms: THREE.InstancedMesh
-  private head: THREE.InstancedMesh
-  private cap: THREE.InstancedMesh
-  private m = new THREE.Matrix4()
-  private q = new THREE.Quaternion()
-  private p = new THREE.Vector3()
-  private sc = new THREE.Vector3()
-  private col = new THREE.Color()
-
-  constructor(count: number) {
-    const legGeo = new THREE.BoxGeometry(0.13, 0.82, 0.15)
-    legGeo.translate(0, 0.41, 0)
-    const torsoGeo = new THREE.BoxGeometry(0.42, 0.56, 0.24)
-    const armGeo = new THREE.BoxGeometry(0.1, 0.5, 0.1)
-    armGeo.translate(0, -0.25, 0)
-    const headGeo = new THREE.SphereGeometry(0.12, 10, 8)
-    const capGeo = new THREE.SphereGeometry(0.13, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2)
-    this.legs = new THREE.InstancedMesh(legGeo, new THREE.MeshStandardMaterial({ roughness: 0.9 }), count * 2)
-    this.torso = new THREE.InstancedMesh(torsoGeo, new THREE.MeshStandardMaterial({ roughness: 0.9 }), count)
-    this.arms = new THREE.InstancedMesh(armGeo, new THREE.MeshStandardMaterial({ roughness: 0.9 }), count * 2)
-    this.head = new THREE.InstancedMesh(headGeo, new THREE.MeshStandardMaterial({ color: 0xc8956c, roughness: 0.8 }), count)
-    this.cap = new THREE.InstancedMesh(capGeo, new THREE.MeshStandardMaterial({ roughness: 0.9 }), count)
-    for (const mesh of [this.legs, this.torso, this.arms, this.head, this.cap]) {
-      mesh.castShadow = true
-      this.group.add(mesh)
-    }
-  }
-
-  setPerson(i: number, x: number, y0: number, z: number, rot: number, h: number, shirt: number, pants: number, cap: number, swing: number) {
-    const cos = Math.cos(rot)
-    const sin = Math.sin(rot)
-    // Un punto en el espacio local de la persona (adelante = +x local) a mundo.
-    const local = (lx: number, ly: number, lz: number) => this.p.set(x + lx * cos + lz * sin, y0 + ly * h, z - lx * sin + lz * cos)
-    this.q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rot)
-    this.sc.set(1, h, 1)
-    // Piernas (balanceo opuesto).
-    for (const side of [-1, 1]) {
-      const swingQ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), side * swing * 0.6)
-      const qq = this.q.clone().multiply(swingQ)
-      local(0, 0, side * 0.09)
-      this.legs.setMatrixAt(i * 2 + (side > 0 ? 1 : 0), this.m.compose(this.p, qq, this.sc))
-      this.legs.setColorAt(i * 2 + (side > 0 ? 1 : 0), this.col.setHex(pants))
-    }
-    local(0, 1.1, 0)
-    this.torso.setMatrixAt(i, this.m.compose(this.p, this.q, this.sc))
-    this.torso.setColorAt(i, this.col.setHex(shirt))
-    for (const side of [-1, 1]) {
-      const swingQ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), -side * swing * 0.5)
-      const qq = this.q.clone().multiply(swingQ)
-      local(0, 1.36, side * 0.27)
-      this.arms.setMatrixAt(i * 2 + (side > 0 ? 1 : 0), this.m.compose(this.p, qq, this.sc))
-      this.arms.setColorAt(i * 2 + (side > 0 ? 1 : 0), this.col.setHex(shirt))
-    }
-    local(0, 1.52, 0)
-    this.sc.set(1, 1, 1)
-    this.head.setMatrixAt(i, this.m.compose(this.p, this.q, this.sc))
-    if (cap >= 0) {
-      local(0, 1.55, 0)
-      this.cap.setMatrixAt(i, this.m.compose(this.p, this.q, this.sc))
-      this.cap.setColorAt(i, this.col.setHex(cap))
-    } else {
-      this.cap.setMatrixAt(i, this.m.makeScale(0, 0, 0))
-    }
-  }
-
-  commit() {
-    for (const mesh of [this.legs, this.torso, this.arms, this.head, this.cap]) {
-      mesh.instanceMatrix.needsUpdate = true
-      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
-    }
-  }
-}
 
 /** Exportadas para previsualizar los banners en herramientas de desarrollo. */
 export { makeACTBanner, makeGABanner }

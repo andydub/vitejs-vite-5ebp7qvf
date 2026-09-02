@@ -47,6 +47,15 @@ git add -A && git commit && git push -u origin claude/racing-game-alvear-nzrosq
   (`updatePace` en `race.ts`), Pashkowec es el rezagado.
 - Logos reales de la Municipalidad y ACT (`public/img/`) sobre los carteles
   dibujados; foto de Lucio en la placa del relator.
+- Borde de pista: la textura de la pista sobresale `TRACK_OVERHANG` m sobre
+  las bermas y se recorta con alfa (`alphaTest`) para que la tierra
+  compactada se deshaga en lenguas y terrones; `BERM_PROFILE` (track.ts) es
+  la única fuente del perfil de la berma. Piedras, pastos secos y carteles de
+  100/50 m en `buildTrackDressing`.
+- Público en `src/game/crowd.ts` (figuras con cápsulas, piel/pelo/gorra,
+  posturas). La huida ante un auto que se sale está en `updateCrowd`
+  (scene3d.ts): huyen hacia los costados de la trayectoria, esperan y
+  vuelven caminando. Los de arriba del camión son `fixed`.
 
 ## Cómo probar sin GPU
 
@@ -57,6 +66,12 @@ git add -A && git commit && git push -u origin claude/racing-game-alvear-nzrosq
 - Capturas: `npx vite preview --port 4173` + Playwright con Chromium en
   `--use-angle=swiftshader`. Cada frame tarda ~2 s; usar viewport chico
   (640×360) y esperas largas. Abortar `fonts.googleapis.com` en las pruebas.
+  Playwright global está en `/opt/node22/lib/node_modules/playwright`.
+  Al clic en "Largar" usar `{ noWaitAfter: true }` (la escena tarda en
+  construirse). En carrera, `window.__sport4 = { race, scene }` permite
+  teletransportar al jugador (`race.player.x/y/heading/speed`), cambiar
+  `scene.cameraMode` y leer `scene.fleeingCount`. El cartel "¡Largaron!"
+  tapa la pantalla hasta ~5 s después de `race.player.lapStartTime`.
 - Las imágenes pegadas en el chat no llegan como archivo: pedir que las suba
   como adjunto o al repo (`public/`).
 

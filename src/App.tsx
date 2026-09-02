@@ -205,6 +205,9 @@ export default function App() {
     const race = raceRef.current
     if (!canvas || !minimap || !race) return
     const scene = new Scene3D(canvas, race.track, race.cars)
+    // Gancho para pruebas automatizadas (capturas con Playwright): permite
+    // teletransportar autos y cambiar la cámara desde la consola.
+    ;(window as unknown as { __sport4?: unknown }).__sport4 = { race, scene }
     const mmCtx = minimap.getContext('2d')!
     const input = inputRef.current
     input.attach()

@@ -18,7 +18,7 @@ export const TRACK_WIDTH_M = 11
 
 /** Perfil transversal de las bermas (offset desde el borde de pista, altura). Ambos lados. */
 export const BERM_PROFILE: { off: number; y: number }[] = [
-  { off: -0.2, y: 0.03 },
+  { off: 0, y: 0.02 },
   { off: 1.6, y: 0.42 },
   { off: 3.2, y: 0.28 },
   { off: 6, y: 0 },
@@ -293,7 +293,7 @@ export class Track {
    */
   private readonly outwardSign: number
 
-  outwardAt(_index?: number): number {
+  outwardAt(): number {
     return this.outwardSign
   }
 
@@ -306,7 +306,7 @@ export class Track {
     const lat = this.lateralOffset(x, y, idx)
     const d = Math.abs(lat) - this.width / 2
     if (d <= BERM_PROFILE[0].off) return TRACK_SURFACE_Y
-    const outward = Math.sign(lat) === this.outwardAt(idx)
+    const outward = Math.sign(lat) === this.outwardAt()
     const profiles = outward ? [BERM_PROFILE, EMBANKMENT_PROFILE] : [BERM_PROFILE]
     for (const prof of profiles) {
       for (let i = 0; i < prof.length - 1; i++) {
