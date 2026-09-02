@@ -10,7 +10,7 @@ export type RacePhase = 'intro' | 'countdown' | 'racing' | 'finished'
  * canta "tres", "dos", "uno" y "¡largaron!". La cuenta en pantalla y la
  * largada de los autos siguen estos tiempos.
  */
-export const COUNTDOWN_CUES = { three: 0.25, two: 1.2, one: 2.05, go: 2.75 }
+export const COUNTDOWN_CUES = { three: 0.25, two: 1.2, one: 2.05, go: 3.15 }
 export type Difficulty = 'facil' | 'normal'
 
 export interface DriverSpec {
