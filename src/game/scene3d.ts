@@ -601,11 +601,12 @@ function makeGABanner(): THREE.CanvasTexture {
   const tex = canvasTexture(c, false)
   // Logo real de la Municipalidad (public/img/logo-alvear.png) si está disponible.
   loadOptionalImage('logo-alvear.png', (img) => {
+    // El logo real ya trae el texto: se borra todo lo dibujado del medio del panel.
     ctx.fillStyle = '#ffffff'
-    ctx.fillRect(30, h * 0.2, w - 60, h * 0.42)
-    const lw = w - 80
+    ctx.fillRect(24, h * 0.14, w - 48, h * 0.64)
+    const lw = w - 70
     const lh = (lw * img.height) / img.width
-    ctx.drawImage(img, 40, h * 0.41 - lh / 2, lw, lh)
+    ctx.drawImage(img, 35, h * 0.44 - lh / 2, lw, lh)
     tex.needsUpdate = true
   })
   return tex
