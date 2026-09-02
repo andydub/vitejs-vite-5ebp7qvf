@@ -248,6 +248,15 @@ export class Track {
     return this.points[((index % n) + n) % n]
   }
 
+  /** Punto interpolado para un índice fraccionario (para cámaras suaves). */
+  pointAtF(index: number): { x: number; y: number; heading: number } {
+    const i0 = Math.floor(index)
+    const t = index - i0
+    const a = this.pointAt(i0)
+    const b = this.pointAt(i0 + 1)
+    return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, heading: a.heading + wrapAngle(b.heading - a.heading) * t }
+  }
+
   pointAtDistance(s: number): TrackPoint {
     return this.pointAt(Math.round(s))
   }

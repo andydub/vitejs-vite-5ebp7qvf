@@ -21,7 +21,7 @@ export interface DriverSpec {
 export const RIVALS: DriverSpec[] = [
   { name: 'Miguel Alberto Olivera', short: 'M.A. OLIVERA', number: 5, color: '#d4202a', cage: '#ffffff', skill: 0.96, model: CAR_MODELS.car29, retint: true },
   { name: 'Miguel Ángel Olivera', short: 'M.Á. OLIVERA', number: 55, color: '#e8e8e8', cage: '#d4202a', skill: 0.95, model: CAR_MODELS.car1, retint: true },
-  { name: 'Román', short: 'ROMÁN', number: 8, color: '#1f8f3a', cage: '#111111', skill: 0.93, model: CAR_MODELS.car29, retint: true },
+  { name: 'Román Majstruk', short: 'R. MAJSTRUK', number: 8, color: '#1f8f3a', cage: '#111111', skill: 0.93, model: CAR_MODELS.car29, retint: true },
   { name: 'Federico Rodríguez', short: 'F. RODRÍGUEZ', number: 14, color: '#f2a900', cage: '#111111', skill: 0.92, model: CAR_MODELS.car1, retint: true },
   { name: 'Mario Carreras', short: 'M. CARRERAS', number: 17, color: '#1d5bd8', cage: '#dcdcdc', skill: 0.9, model: CAR_MODELS.car29, retint: true },
   { name: 'Thiago Carreras', short: 'T. CARRERAS', number: 71, color: '#20b2c8', cage: '#111111', skill: 0.88, model: CAR_MODELS.car1, retint: true },
@@ -29,7 +29,6 @@ export const RIVALS: DriverSpec[] = [
   { name: 'David López', short: 'D. LÓPEZ', number: 44, color: '#ff6a00', cage: '#111111', skill: 0.86, model: CAR_MODELS.car1, retint: true },
   { name: 'Diego Pashkowec', short: 'D. PASHKOWEC', number: 23, color: '#3c3c3c', cage: '#ffd500', skill: 0.82, model: CAR_MODELS.car29, retint: true },
   { name: 'Horacio Álvarez', short: 'H. ÁLVAREZ', number: 2, color: '#c8189a', cage: '#111111', skill: 0.85, model: CAR_MODELS.car1, retint: true },
-  { name: 'Schiavone', short: 'SCHIAVONE', number: 29, color: '#1d5bd8', cage: '#dcdcdc', skill: 0.9, model: CAR_MODELS.car29, retint: false },
 ]
 
 export const PLAYER_SPEC: DriverSpec = {
@@ -66,6 +65,8 @@ export class Race {
   private results: Car[] = []
   private displayOrder: Car[] = []
   private pendingOrder: { order: Car[]; since: number } | null = null
+  private towerCache: TowerRow[] = []
+  private towerAt = -Infinity
 
   readonly totalLaps: number
 
@@ -142,19 +143,26 @@ export class Race {
     }
   }
 
-  /** Filas de la torre de tiempos con la diferencia respecto del de adelante. */
+  /**
+   * Filas de la torre de tiempos con la diferencia respecto del de adelante.
+   * Se recalcula una vez por segundo para que los números no bailen.
+   */
   tower(): TowerRow[] {
-    return this.displayOrder.map((c, i) => {
+    if (this.time - this.towerAt < 1 && this.towerCache.length) return this.towerCache
+    this.towerAt = this.time
+    this.towerCache = this.displayOrder.map((c, i) => {
       let gap = 'LÍDER'
       if (i > 0) {
         const ahead = this.displayOrder[i - 1]
-        if (c.finished && ahead.finished) gap = `+${(c.finishTime - ahead.finishTime).toFixed(3)}`
+        if (c.finished && ahead.finished) gap = `+${(c.finishTime - ahead.finishTime).toFixed(1)}`
         else if (ahead.progress - c.progress > this.track.length) gap = `+${Math.floor((ahead.progress - c.progress) / this.track.length)} V`
-        else gap = `+${ahead.gapAhead(c, this.time).toFixed(3)}`
+        else gap = `+${ahead.gapAhead(c, this.time).toFixed(1)}`
       }
       return { pos: i + 1, number: c.number, short: c.short || c.name.toUpperCase(), color: c.color, gap, isPlayer: c.isPlayer, finished: c.finished }
     })
+    return this.towerCache
   }
+
 
   step(dt: number, playerControls: Controls) {
     this.time += dt

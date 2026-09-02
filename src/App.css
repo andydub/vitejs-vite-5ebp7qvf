@@ -133,11 +133,25 @@
 }
 .topbar {
   position: absolute;
-  top: 16px;
+  bottom: 16px;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
   gap: 8px;
+}
+.topbar[hidden],
+.touch[hidden] {
+  display: none;
+}
+@media (pointer: coarse) {
+  .topbar {
+    bottom: auto;
+    top: 210px;
+    left: auto;
+    right: 10px;
+    transform: none;
+    flex-direction: column;
+  }
 }
 .quit {
   background: rgba(0, 0, 0, 0.4);
@@ -505,4 +519,375 @@
   .lower-third {
     animation: none;
   }
+}
+
+/* ===== Gráfica de transmisión (estilo ESPN) ===== */
+:root {
+  --tv-red: #d0021b;
+  --tv-ink: #0b0d12;
+  --tv-yellow: #ffcc00;
+  --tv-grey: #d9d9d9;
+  --tv-font: 'Barlow Condensed', 'Arial Narrow', system-ui, sans-serif;
+}
+.game,
+.menu,
+.intro {
+  font-family: 'Barlow', system-ui, sans-serif;
+}
+.tag {
+  display: inline-block;
+  font-family: var(--tv-font);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 14px;
+  padding: 4px 14px;
+  color: #fff;
+  transform: skewX(-12deg);
+  margin: 0;
+}
+.tag > * {
+  display: inline-block;
+  transform: skewX(12deg);
+}
+.tag.red {
+  background: var(--tv-red);
+}
+.tag.black {
+  background: var(--tv-ink);
+}
+.tag.small {
+  font-size: 11px;
+  padding: 2px 10px;
+}
+
+/* Sello "EN VIVO" */
+.bug {
+  position: absolute;
+  top: 14px;
+  left: 16px;
+  display: flex;
+  font-family: var(--tv-font);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  transform: skewX(-12deg);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+.bug span {
+  display: inline-block;
+  padding: 5px 12px;
+  font-size: 14px;
+}
+.bug .live {
+  background: var(--tv-red);
+  color: #fff;
+}
+.bug .show {
+  background: var(--tv-ink);
+  color: #fff;
+}
+
+/* Reemplaza el panel viejo de posición/vueltas */
+.hud.top-left {
+  display: none;
+}
+.hud.tv-times {
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%) skewX(-12deg);
+  display: flex;
+  background: rgba(11, 13, 18, 0.9);
+  border-bottom: 3px solid var(--tv-red);
+  text-shadow: none;
+}
+.hud.tv-times > div {
+  padding: 6px 16px;
+  transform: skewX(12deg);
+  border-right: 1px solid rgba(255, 255, 255, 0.12);
+  min-width: 96px;
+}
+.hud.tv-times > div:last-child {
+  border-right: none;
+}
+.hud.tv-times small {
+  display: block;
+  font-family: var(--tv-font);
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--tv-grey);
+}
+.hud.tv-times b {
+  font-family: var(--tv-font);
+  font-size: 22px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.hud.tv-times b span {
+  font-size: 0.6em;
+  opacity: 0.7;
+}
+
+/* Torre de tiempos */
+.hud.tower {
+  top: 70px;
+  left: 16px;
+  gap: 0;
+  font-family: var(--tv-font);
+  font-size: 15px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  transform: skewX(-10deg);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+}
+.hud.tower .head {
+  display: grid;
+  grid-template-columns: 26px 4px 128px 56px;
+  gap: 6px;
+  background: var(--tv-red);
+  color: #fff;
+  padding: 4px 8px 4px 6px;
+  font-size: 11px;
+  letter-spacing: 0.2em;
+}
+.hud.tower .head span:nth-child(2) {
+  grid-column: 2 / 4;
+}
+.hud.tower .row {
+  grid-template-columns: 26px 4px 128px 56px;
+  background: rgba(11, 13, 18, 0.9);
+  border-radius: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 3px 8px 3px 6px;
+}
+.hud.tower .row.me {
+  background: var(--tv-yellow);
+  color: var(--tv-ink);
+}
+.hud.tower .row > *,
+.hud.tower .head > * {
+  transform: skewX(10deg);
+}
+.hud.tower .p {
+  font-weight: 800;
+}
+.hud.tower .g {
+  color: var(--tv-grey);
+}
+.hud.tower .row.me .g {
+  color: var(--tv-ink);
+}
+
+/* Velocímetro */
+.hud.speed {
+  right: 16px;
+  bottom: 16px;
+  background: rgba(11, 13, 18, 0.9);
+  border-left: 4px solid var(--tv-red);
+  padding: 4px 18px 6px 14px;
+  transform: skewX(-12deg);
+  text-shadow: none;
+  font-family: var(--tv-font);
+}
+.hud.speed b,
+.hud.speed small,
+.hud.speed .warn {
+  display: inline-block;
+  transform: skewX(12deg);
+}
+.hud.speed b {
+  font-size: 48px;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.hud.speed small {
+  font-size: 13px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--tv-grey);
+  margin-left: 6px;
+}
+.hud.speed .warn {
+  display: block;
+  color: var(--tv-yellow);
+}
+.countdown {
+  font-family: var(--tv-font);
+  font-size: 140px;
+  -webkit-text-stroke: 3px var(--tv-red);
+  text-shadow: 0 6px 30px rgba(0, 0, 0, 0.6);
+}
+
+/* Previa */
+.intro-title h1 {
+  font-family: var(--tv-font);
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
+  font-size: clamp(40px, 8vw, 110px);
+  line-height: 0.95;
+  margin: 10px 0;
+}
+.intro-title .tag {
+  font-size: clamp(12px, 1.6vw, 20px);
+}
+.driver-card {
+  left: 6%;
+  bottom: 16%;
+  transform: none;
+  background: none;
+  border: none;
+  padding: 0;
+  gap: 0;
+  min-width: 0;
+  animation: cardSlide 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes cardSlide {
+  from {
+    transform: translateX(-40px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+.driver-card .num {
+  width: 92px;
+  height: 92px;
+  border-radius: 0;
+  background: var(--tv-yellow);
+  color: var(--tv-ink);
+  font-family: var(--tv-font);
+  font-size: 56px;
+  font-weight: 900;
+  transform: skewX(-12deg);
+  margin-right: -6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+.driver-card .num,
+.driver-card .txt {
+  transform: skewX(-12deg);
+}
+.driver-card .txt {
+  background: var(--tv-red);
+  padding: 8px 28px 8px 22px;
+  min-width: min(480px, 70vw);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+.driver-card .txt > * {
+  transform: skewX(12deg);
+}
+.driver-card h2 {
+  font-family: var(--tv-font);
+  font-weight: 800;
+  text-transform: uppercase;
+  font-size: clamp(30px, 4.2vw, 54px);
+  line-height: 1;
+  margin: 0;
+}
+.driver-card .sub {
+  margin: 4px 0 0;
+  font-family: var(--tv-font);
+  font-size: 15px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.driver-card .sub .bar {
+  width: 14px;
+  height: 14px;
+  display: inline-block;
+}
+.lower-third {
+  background: rgba(11, 13, 18, 0.85);
+  border-left: 6px solid var(--tv-red);
+  transform: skewX(-12deg);
+}
+.lower-third > * {
+  transform: skewX(12deg);
+}
+.lower-third h2 {
+  font-family: var(--tv-font);
+  font-weight: 800;
+  text-transform: uppercase;
+}
+.relator {
+  background: rgba(11, 13, 18, 0.85);
+  border-radius: 0;
+  border-left: 4px solid var(--tv-red);
+  padding: 6px 16px 6px 6px;
+  font-family: var(--tv-font);
+}
+.relator .avatar {
+  border-radius: 0;
+  width: 52px;
+  height: 52px;
+  background: linear-gradient(135deg, #1d3f8f, #d42020);
+  background-size: cover;
+  background-position: center top;
+}
+.relator b {
+  font-size: 20px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.skip {
+  font-family: var(--tv-font);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  border-radius: 0;
+  border-left: 3px solid var(--tv-red);
+}
+
+/* Menú */
+.menu {
+  background:
+    radial-gradient(circle at 20% 10%, rgba(208, 2, 27, 0.35), transparent 45%),
+    radial-gradient(circle at 80% 90%, rgba(255, 204, 0, 0.12), transparent 40%),
+    #0b0d12;
+}
+.menu-card {
+  border-radius: 0;
+  border: none;
+  border-top: 6px solid var(--tv-red);
+  background: rgba(255, 255, 255, 0.04);
+}
+.menu-card h1 {
+  font-family: var(--tv-font);
+  font-weight: 900;
+  text-transform: uppercase;
+  font-size: 84px;
+  letter-spacing: 0.02em;
+  margin-top: 10px;
+}
+.menu-card h2 {
+  font-family: var(--tv-font);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 22px;
+}
+.menu-card button {
+  border-radius: 0;
+  font-family: var(--tv-font);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 700;
+}
+.menu-card button.active,
+.menu-card button.primary {
+  background: var(--tv-red);
+  color: #fff;
+  border-color: var(--tv-red);
+}
+.menu-card button.primary {
+  font-size: 26px;
+  padding: 14px 56px;
+  transform: skewX(-10deg);
 }

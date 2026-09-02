@@ -46,50 +46,62 @@ type Screen = 'menu' | 'race' | 'results'
 /** Grilla completa en orden de cajón, para las tarjetas de la previa. */
 const GRID = [...RIVALS, PLAYER_SPEC]
 
+/** Foto del relator: embebida en la página de un solo archivo o servida desde /img. */
+declare global {
+  interface Window {
+    __SPORT4_IMG?: Record<string, string>
+  }
+}
+const lucioSrc: string | null = window.__SPORT4_IMG?.lucio ?? null
+
 /**
  * Sobreimpresos de la previa: título del circuito, tarjetas de pilotos con
  * barrido de luz y la placa del relator. `t` es el tiempo de la previa.
  */
 function IntroOverlay({ t, total, onSkip }: { t: number; total: number; onSkip: () => void }) {
-  const titleEnd = 7
-  const perDriver = Math.max(1.6, (total * 0.5 - titleEnd - 1) / GRID.length)
-  const driverIdx = Math.floor((t - titleEnd) / perDriver)
-  const driver = t >= titleEnd && driverIdx < GRID.length ? GRID[driverIdx] : null
-  const driverT = t - titleEnd - driverIdx * perDriver
-  const flight = t > total * 0.5
+  const titleEnd = 8
+  const cardsStart = 22 // cuando la cámara llega a la primera fila
+  const cardsEnd = total - 7
+  const perDriver = (cardsEnd - cardsStart) / GRID.length
+  const driverIdx = Math.floor((t - cardsStart) / perDriver)
+  const driver = t >= cardsStart && driverIdx < GRID.length ? GRID[driverIdx] : null
+  const driverT = t - cardsStart - driverIdx * perDriver
+  const flight = t > titleEnd && t < cardsStart
   return (
     <div className="intro">
       <div className="flare a" />
       <div className="flare b" />
       {t < titleEnd && (
         <div className="intro-title" style={{ opacity: t < 0.6 ? t / 0.6 : t > titleEnd - 0.8 ? (titleEnd - t) / 0.8 : 1 }}>
-          <p className="eyebrow sweep">Categorías Tradicionales · Mendoza</p>
+          <p className="tag red">Categorías Tradicionales · Mendoza</p>
           <h1 className="sweep">Autódromo Víctor García</h1>
-          <p className="sub">General Alvear · Sport 4 · Final</p>
+          <p className="tag black">General Alvear · Sport 4 · Final</p>
         </div>
       )}
       {driver && (
         <div key={driverIdx} className="driver-card" style={{ opacity: driverT < 0.3 ? driverT / 0.3 : driverT > perDriver - 0.3 ? (perDriver - driverT) / 0.3 : 1 }}>
-          <div className="num" style={{ background: driver.color, color: driver.cage }}>
-            {driver.number}
-          </div>
+          <div className="num">{driver.number}</div>
           <div className="txt">
-            <p className="slot">Cajón {driverIdx + 1}</p>
-            <h2 className="sweep">{driver.name}</h2>
-            <p className="team">{driver.number === 1 ? 'Tu auto' : 'Sport 4'}</p>
+            <h2>{driver.name}</h2>
+            <p className="sub">
+              <span className="bar" style={{ background: driver.color }} />
+              Cajón {driverIdx + 1} · {driver.number === 1 ? 'Tu auto' : 'Sport 4'}
+            </p>
           </div>
         </div>
       )}
       {flight && (
         <div className="lower-third">
-          <p className="slot">Última final de la jornada</p>
-          <h2 className="sweep">Sport 4 · Categorías Tradicionales</h2>
+          <p className="tag red">Última final de la jornada</p>
+          <h2>Sport 4 · Categorías Tradicionales</h2>
         </div>
       )}
       <div className="relator">
-        <div className="avatar">LA</div>
+        <div className="avatar" style={lucioSrc ? { backgroundImage: `url(${lucioSrc})` } : undefined}>
+          {lucioSrc ? '' : 'LA'}
+        </div>
         <div>
-          <p className="slot">Relata</p>
+          <p className="tag red small">Relata</p>
           <b>Lucio Aguirre</b>
         </div>
       </div>
@@ -206,10 +218,16 @@ export default function App() {
         race.setIntroTime((now - introStart) / 1000)
         acc = 0
       }
+      if (race.phase === 'intro') {
+        // La previa corre con el reloj real para ir en sincronía con el relato.
+        race.setIntroTime((now - introStart) / 1000)
+        acc = 0
+      }
       while (acc >= FIXED) {
         race.step(FIXED, controls)
         acc -= FIXED
       }
+      if (race.phase === 'intro' && race.time >= race.introDuration) skipIntro()
 
       const p = race.player
       if (race.phase === 'intro') {
@@ -303,10 +321,10 @@ export default function App() {
     return (
       <div className="menu">
         <div className="menu-card">
-          <p className="eyebrow">Categorías Tradicionales · Mendoza</p>
+          <p className="tag red">Categorías Tradicionales · Mendoza</p>
           <h1>Sport 4</h1>
           <h2>Autódromo Municipal Víctor García</h2>
-          <p className="muted">General Alvear, Mendoza · circuito de tierra · {TRACK_LENGTH_M} m · trazado aproximado</p>
+          <p className="muted">General Alvear, Mendoza · circuito de tierra · {TRACK_LENGTH_M} m</p>
           <label>
             Vueltas
             <div className="laps">
@@ -379,26 +397,34 @@ export default function App() {
       {hud && hud.phase === 'intro' && <IntroOverlay t={hud.time} total={hud.introTotal} onSkip={() => skipRef.current()} />}
       {hud && hud.phase !== 'intro' && (
         <>
-          <div className="hud top-left">
-            <div className="pos">
-              P{hud.position}
-              <span>/{hud.total}</span>
+          <div className="bug">
+            <span className="live">EN VIVO</span>
+            <span className="show">SPORT 4 · FINAL</span>
+          </div>
+          <div className="hud tv-times">
+            <div>
+              <small>Vuelta</small>
+              <b>
+                {hud.lap}
+                <span>/{raceRef.current?.totalLaps}</span>
+              </b>
             </div>
-            <div className="lap">
-              Vuelta {hud.lap}
-              <span>/{raceRef.current?.totalLaps}</span>
+            <div>
+              <small>Actual</small>
+              <b>{formatTime(hud.lapTime)}</b>
             </div>
-            <div className="times">
-              <div>
-                Actual <b>{formatTime(hud.lapTime)}</b>
-              </div>
-              <div>
-                Mejor <b>{formatTime(hud.bestLap)}</b>
-              </div>
+            <div>
+              <small>Mejor</small>
+              <b>{formatTime(hud.bestLap)}</b>
             </div>
           </div>
           {(hud.phase === 'racing' || hud.phase === 'finished') && (
             <div className="hud tower">
+              <div className="head">
+                <span>Pos</span>
+                <span>Piloto</span>
+                <span>Dif.</span>
+              </div>
               {hud.tower.map((r) => (
                 <div key={r.number} className={`row${r.isPlayer ? ' me' : ''}`}>
                   <span className="p">{r.pos}</span>
@@ -410,7 +436,8 @@ export default function App() {
             </div>
           )}
           <div className="hud speed">
-            <b>{Math.round(hud.speed)}</b> km/h
+            <b>{Math.round(hud.speed)}</b>
+            <small>km/h</small>
             {hud.offTrack && <div className="warn">¡Afuera!</div>}
           </div>
           {hud.phase === 'countdown' && (

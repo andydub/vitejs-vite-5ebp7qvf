@@ -365,7 +365,78 @@ function makeBannerTexture(text: string, bg: string, fg: string, w = 1024, h = 1
   return canvasTexture(c, false)
 }
 
-/** Banner de la Asociación de Categorías Tradicionales (ACT): damero, óvalo y franja roja. */
+/** Texto en arco (para el óvalo de ACT). */
+function arcText(ctx: CanvasRenderingContext2D, text: string, cx: number, cy: number, r: number, centerAngle: number, spread: number, inward: boolean) {
+  const chars = text.split('')
+  const step = spread / Math.max(1, chars.length - 1)
+  chars.forEach((ch, i) => {
+    // En el arco inferior las letras avanzan en sentido contrario para leerse de izquierda a derecha.
+    const a = inward ? centerAngle + spread / 2 - step * i : centerAngle - spread / 2 + step * i
+    ctx.save()
+    ctx.translate(cx + Math.cos(a) * r, cy + Math.sin(a) * r)
+    ctx.rotate(a + (inward ? -Math.PI / 2 : Math.PI / 2))
+    ctx.fillText(ch, 0, 0)
+    ctx.restore()
+  })
+}
+
+/** Logo de ACT: óvalo azul con borde gris, bandera argentina y damero dentro de un anillo rojo, "ACT" en rojo. */
+function drawACTLogo(ctx: CanvasRenderingContext2D, cx: number, cy: number, w: number) {
+  const h = w * 0.66
+  ctx.save()
+  ctx.translate(cx, cy)
+  // Óvalo azul con borde gris.
+  ctx.fillStyle = '#1730b8'
+  ctx.strokeStyle = '#a9a9a9'
+  ctx.lineWidth = w * 0.03
+  ctx.beginPath()
+  ctx.ellipse(0, 0, w / 2, h / 2, 0, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.stroke()
+  // Interior: mitad bandera, mitad damero, recortado por el óvalo interno.
+  const iw = w * 0.56
+  const ih = h * 0.52
+  ctx.save()
+  ctx.beginPath()
+  ctx.ellipse(0, 0, iw / 2, ih / 2, 0, 0, Math.PI * 2)
+  ctx.clip()
+  const bands = ['#5bc4f0', '#ffffff', '#5bc4f0']
+  bands.forEach((c, i) => {
+    ctx.fillStyle = c
+    ctx.fillRect(-iw / 2, -ih / 2 + (ih / 3) * i, iw / 2, ih / 3 + 1)
+  })
+  const sq = iw / 12
+  for (let y = 0; y < 8; y++) {
+    for (let x = 0; x < 6; x++) {
+      ctx.fillStyle = (x + y) % 2 ? '#111' : '#fff'
+      ctx.fillRect(x * sq, -ih / 2 + y * sq, sq, sq)
+    }
+  }
+  ctx.restore()
+  // Anillo rojo.
+  ctx.strokeStyle = '#e60000'
+  ctx.lineWidth = w * 0.045
+  ctx.beginPath()
+  ctx.ellipse(0, 0, iw / 2, ih / 2, 0, 0, Math.PI * 2)
+  ctx.stroke()
+  // ACT.
+  ctx.fillStyle = '#e60000'
+  ctx.strokeStyle = '#ffffff'
+  ctx.lineWidth = w * 0.02
+  ctx.font = `900 ${Math.round(w * 0.2)}px sans-serif`
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.strokeText('ACT', 0, w * 0.01)
+  ctx.fillText('ACT', 0, w * 0.01)
+  // Textos en arco.
+  ctx.fillStyle = '#ffffff'
+  ctx.font = `bold ${Math.round(w * 0.048)}px sans-serif`
+  arcText(ctx, 'ASOCIACION DE CATEGORIAS', 0, 0, h * 0.41, -Math.PI / 2, 2.3, false)
+  arcText(ctx, 'TRADICIONALES', 0, 0, h * 0.41, Math.PI / 2, 1.35, true)
+  ctx.restore()
+}
+
+/** Banner de la Asociación de Categorías Tradicionales (ACT): damero, logo y franja roja. */
 function makeACTBanner(): THREE.CanvasTexture {
   const w = 1024
   const h = 1024
@@ -375,66 +446,116 @@ function makeACTBanner(): THREE.CanvasTexture {
   const ctx = c.getContext('2d')!
   ctx.fillStyle = '#f4f4f4'
   ctx.fillRect(0, 0, w, h)
-  // Damero arriba y abajo.
-  const sq = 64
-  for (let y = 0; y < 3; y++) {
-    for (let x = 0; x < w / sq; x++) {
-      ctx.fillStyle = (x + y) % 2 ? '#111' : '#f4f4f4'
+  // Damero en toda la parte superior, como en la lona real.
+  const sq = 96
+  for (let y = 0; y < 6; y++) {
+    for (let x = 0; x < w / sq + 1; x++) {
+      ctx.fillStyle = (x + y) % 2 ? '#1a1a1a' : '#f4f4f4'
       ctx.fillRect(x * sq, y * sq, sq, sq)
     }
   }
-  // Franja roja degradada abajo.
-  const g = ctx.createLinearGradient(0, h * 0.72, 0, h)
+  // Foto azulada de autos (bandas simulando la foto) y franja roja degradada abajo.
+  const photo = ctx.createLinearGradient(0, h * 0.56, 0, h * 0.74)
+  photo.addColorStop(0, '#6f8fbf')
+  photo.addColorStop(1, '#3d5a8a')
+  ctx.fillStyle = photo
+  ctx.fillRect(0, h * 0.56, w, h * 0.18)
+  ctx.fillStyle = '#c9b48a'
+  ctx.fillRect(0, h * 0.68, w, h * 0.06)
+  const g = ctx.createLinearGradient(0, h * 0.74, 0, h)
   g.addColorStop(0, '#f4f4f4')
   g.addColorStop(1, '#d42020')
   ctx.fillStyle = g
-  ctx.fillRect(0, h * 0.72, w, h * 0.28)
-  // Foto azulada de autos (bandas de color simulando la foto).
-  ctx.fillStyle = '#6f8fbf'
-  ctx.fillRect(0, h * 0.56, w, h * 0.16)
-  ctx.fillStyle = '#c9b48a'
-  ctx.fillRect(0, h * 0.66, w, h * 0.06)
-  // Óvalo azul con ACT.
-  ctx.fillStyle = '#1d3f8f'
-  ctx.beginPath()
-  ctx.ellipse(w / 2, h * 0.4, 300, 150, 0, 0, Math.PI * 2)
-  ctx.fill()
-  ctx.strokeStyle = '#f4f4f4'
-  ctx.lineWidth = 8
-  ctx.stroke()
-  ctx.fillStyle = '#f4f4f4'
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'middle'
-  ctx.font = 'bold 42px sans-serif'
-  ctx.fillText('ASOCIACIÓN DE CATEGORÍAS', w / 2, h * 0.31)
-  ctx.font = 'bold 36px sans-serif'
-  ctx.fillText('TRADICIONALES', w / 2, h * 0.5)
-  ctx.font = '900 150px sans-serif'
-  ctx.fillStyle = '#d42020'
-  ctx.strokeStyle = '#f4f4f4'
-  ctx.lineWidth = 10
-  ctx.strokeText('ACT', w / 2, h * 0.405)
-  ctx.fillText('ACT', w / 2, h * 0.405)
+  ctx.fillRect(0, h * 0.74, w, h * 0.26)
+  drawACTLogo(ctx, w / 2, h * 0.36, 520)
   ctx.fillStyle = '#333'
   ctx.font = 'bold 30px sans-serif'
-  ctx.fillText('DESDE 1982', w / 2, h * 0.545)
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillText('DESDE 1982', w / 2, h * 0.6)
   // Escudos laterales.
-  for (const x of [120, w - 120]) {
-    for (const y of [h * 0.28, h * 0.42]) {
+  for (const x of [110, w - 110]) {
+    for (const y of [h * 0.3, h * 0.44]) {
       ctx.fillStyle = '#d42020'
       ctx.beginPath()
-      ctx.arc(x, y, 42, 0, Math.PI * 2)
+      ctx.arc(x, y, 40, 0, Math.PI * 2)
       ctx.fill()
       ctx.fillStyle = '#f4f4f4'
       ctx.beginPath()
-      ctx.arc(x, y, 30, 0, Math.PI * 2)
+      ctx.arc(x, y, 28, 0, Math.PI * 2)
       ctx.fill()
     }
   }
   return canvasTexture(c, false)
 }
 
-/** Panel de la Municipalidad de General Alvear: arcos de colores y texto azul. */
+/**
+ * Isologo de General Alvear: nudo de cintas naranja, verde y azul, y texto.
+ * `size` es el ancho del nudo; con `stacked` el texto va centrado debajo.
+ */
+function drawGALogo(ctx: CanvasRenderingContext2D, cx: number, cy: number, size: number, stacked = false) {
+  const u = size / 400 // el nudo ocupa ≈400 unidades de ancho en el dibujo original
+  ctx.save()
+  ctx.translate(cx - 200 * u, cy - 240 * u)
+  ctx.scale(u, u)
+  ctx.lineCap = 'round'
+  ctx.lineWidth = 62
+  // Cinta verde: baja por la izquierda y gira hacia abajo a la derecha.
+  let g = ctx.createLinearGradient(60, 200, 300, 460)
+  g.addColorStop(0, '#2fb5a0')
+  g.addColorStop(1, '#0f6d68')
+  ctx.strokeStyle = g
+  ctx.beginPath()
+  ctx.moveTo(150, 205)
+  ctx.bezierCurveTo(40, 260, 60, 380, 160, 420)
+  ctx.bezierCurveTo(200, 436, 240, 436, 262, 440)
+  ctx.stroke()
+  // Cinta naranja: sube desde el centro, pasa por arriba y cae a la derecha en rojo.
+  g = ctx.createLinearGradient(120, 60, 300, 460)
+  g.addColorStop(0, '#f4b21e')
+  g.addColorStop(0.5, '#f18a1c')
+  g.addColorStop(1, '#d73b2a')
+  ctx.strokeStyle = g
+  ctx.beginPath()
+  ctx.moveTo(110, 120)
+  ctx.bezierCurveTo(140, 40, 260, 60, 262, 170)
+  ctx.bezierCurveTo(264, 260, 250, 380, 262, 440)
+  ctx.stroke()
+  // Cinta azul: swoosh de izquierda a derecha por el medio.
+  g = ctx.createLinearGradient(100, 250, 380, 190)
+  g.addColorStop(0, '#0d3a63')
+  g.addColorStop(1, '#3b8fbd')
+  ctx.strokeStyle = g
+  ctx.beginPath()
+  ctx.moveTo(150, 205)
+  ctx.bezierCurveTo(200, 245, 280, 250, 360, 185)
+  ctx.stroke()
+  // Texto: a la derecha (logo horizontal) o debajo (panel vertical).
+  ctx.textBaseline = 'alphabetic'
+  ctx.fillStyle = '#1f3a6b'
+  if (stacked) {
+    ctx.textAlign = 'center'
+    ctx.font = "500 96px 'Barlow', sans-serif"
+    ctx.fillText('General', 200, 580)
+    ctx.font = "900 150px 'Barlow Condensed', 'Arial Narrow', sans-serif"
+    ctx.fillText('ALVEAR', 200, 720)
+    ctx.fillStyle = '#2bb3a0'
+    ctx.font = "600 40px 'Barlow', sans-serif"
+    ctx.fillText('Tierra de Oportunidades', 200, 780)
+  } else {
+    ctx.textAlign = 'left'
+    ctx.font = "500 118px 'Barlow', sans-serif"
+    ctx.fillText('General', 420, 240)
+    ctx.font = "900 176px 'Barlow Condensed', 'Arial Narrow', sans-serif"
+    ctx.fillText('ALVEAR', 400, 395)
+    ctx.fillStyle = '#2bb3a0'
+    ctx.font = "600 44px 'Barlow', sans-serif"
+    ctx.fillText('Tierra de Oportunidades', 420, 465)
+  }
+  ctx.restore()
+}
+
+/** Panel de la Municipalidad de General Alvear: fondo blanco con formas de colores y el isologo. */
 function makeGABanner(): THREE.CanvasTexture {
   const w = 512
   const h = 1024
@@ -444,14 +565,14 @@ function makeGABanner(): THREE.CanvasTexture {
   const ctx = c.getContext('2d')!
   ctx.fillStyle = '#ffffff'
   ctx.fillRect(0, 0, w, h)
+  // Arcos y figuras decorativas del panel real.
   const arcs: [number, number, number, string][] = [
-    [140, 200, 110, '#2bb3a0'],
-    [380, 320, 90, '#f5a623'],
-    [120, 760, 120, '#8e3a9c'],
-    [400, 880, 100, '#e94e3d'],
-    [260, 520, 70, '#2f6db5'],
+    [110, 150, 100, '#2bb3a0'],
+    [420, 260, 80, '#f5a623'],
+    [90, 800, 110, '#8e3a9c'],
+    [430, 900, 90, '#e94e3d'],
   ]
-  ctx.lineWidth = 34
+  ctx.lineWidth = 30
   ctx.lineCap = 'round'
   for (const [x, y, r, col] of arcs) {
     ctx.strokeStyle = col
@@ -459,22 +580,29 @@ function makeGABanner(): THREE.CanvasTexture {
     ctx.arc(x, y, r, Math.PI * 0.2, Math.PI * 1.3)
     ctx.stroke()
   }
-  ctx.fillStyle = '#1f4e9c'
+  ctx.fillStyle = '#2bb3a0'
+  ctx.beginPath()
+  ctx.moveTo(380, 80)
+  ctx.lineTo(404, 120)
+  ctx.lineTo(356, 120)
+  ctx.closePath()
+  ctx.fill()
+  ctx.fillStyle = '#8e3a9c'
+  ctx.save()
+  ctx.translate(420, 700)
+  ctx.rotate(Math.PI / 4)
+  ctx.fillRect(-14, -14, 28, 28)
+  ctx.restore()
+  // Isologo grande, centrado.
+  drawGALogo(ctx, w / 2, h * 0.36, 300, true)
+  ctx.fillStyle = '#333'
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  ctx.font = '500 54px sans-serif'
-  ctx.fillText('General', w / 2, h * 0.58)
-  ctx.font = '900 92px sans-serif'
-  ctx.fillText('ALVEAR', w / 2, h * 0.655)
-  ctx.font = '500 30px sans-serif'
-  ctx.fillStyle = '#2bb3a0'
-  ctx.fillText('Tierra de Oportunidades', w / 2, h * 0.715)
-  ctx.fillStyle = '#333'
-  ctx.font = '24px sans-serif'
-  ctx.fillText('Dirección de', w / 2, h * 0.78)
-  ctx.font = 'bold 26px sans-serif'
-  ctx.fillText('Deportes, Actividad', w / 2, h * 0.815)
-  ctx.fillText('Física y Recreación', w / 2, h * 0.85)
+  ctx.font = "500 24px 'Barlow', sans-serif"
+  ctx.fillText('Dirección de', w / 2, h * 0.8)
+  ctx.font = "700 26px 'Barlow', sans-serif"
+  ctx.fillText('Deportes, Actividad', w / 2, h * 0.835)
+  ctx.fillText('Física y Recreación', w / 2, h * 0.87)
   return canvasTexture(c, false)
 }
 
@@ -838,9 +966,8 @@ export class Scene3D {
   private grade!: ShaderPass
   private smoke: THREE.Sprite[] = []
   private flags: THREE.Mesh[] = []
-  private walkers: { index: number; x: number; z: number; y0: number; h: number; dx: number; dz: number; amp: number; speed: number; phase: number }[] = []
-  private peopleBodies: THREE.InstancedMesh | null = null
-  private peopleHeads: THREE.InstancedMesh | null = null
+  private walkers: { index: number; x: number; z: number; y0: number; h: number; shirt: number; pants: number; cap: number; dx: number; dz: number; amp: number; speed: number; phase: number }[] = []
+  private crowd: CrowdPeople | null = null
   private time = 0
   cameraMode: CameraMode = 'chase'
 
@@ -1416,6 +1543,35 @@ export class Scene3D {
       f100: { parts: [{ geo: box(5.3, 0.55, 1.95), mat: paintMat(), off: [0, 0.7, 0], colored: true }, { geo: box(1.9, 0.5, 1.85), mat: paintMat(), off: [1.6, 1.22, 0], colored: true }, { geo: box(1.7, 0.9, 1.85), mat: paintMat(), off: [0.15, 1.45, 0], colored: true }, { geo: box(1.6, 0.5, 1.7), mat: glassM, off: [0.15, 1.65, 0] }, { geo: box(2.5, 0.55, 1.9), mat: paintMat(), off: [-1.4, 1.22, 0], colored: true }, { geo: box(0.12, 0.2, 1.9), mat: chromeM, off: [2.65, 0.6, 0] }], wheelR: 0.4, wb: 1.7, tw: 0.86 },
       mb1114: { parts: [{ geo: cabGeo1114, mat: paintMat(), off: [2.8, 1.95, 0], colored: true }, { geo: box(8, 0.5, 2.3), mat: darkM, off: [0, 0.75, 0] }, { geo: box(5.4, 1.9, 2.3), mat: woodM, off: [-1.2, 1.95, 0] }, { geo: box(0.05, 0.9, 2.1), mat: glassM, off: [3.9, 2.3, 0] }, { geo: box(0.1, 0.4, 2.3), mat: chromeM, off: [3.95, 0.8, 0] }], wheelR: 0.5, wb: 2.6, tw: 1.0 },
     }
+    // Detalles comunes: paragolpes cromados, faros, luces traseras y espejos.
+    const dims: Record<VType, { L: number; W: number; lightY: number; cabX: number; cabY: number }> = {
+      falcon: { L: 4.7, W: 1.78, lightY: 0.82, cabX: -0.1, cabY: 1.32 },
+      chevy: { L: 4.9, W: 1.82, lightY: 0.82, cabX: -0.2, cabY: 1.32 },
+      torino: { L: 4.75, W: 1.78, lightY: 0.82, cabX: -0.35, cabY: 1.3 },
+      taunus: { L: 4.4, W: 1.7, lightY: 0.8, cabX: -0.1, cabY: 1.28 },
+      p504: { L: 4.5, W: 1.7, lightY: 0.82, cabX: -0.05, cabY: 1.32 },
+      c3cv: { L: 3.8, W: 1.5, lightY: 0.95, cabX: 0.7, cabY: 1.3 },
+      mehari: { L: 3.5, W: 1.5, lightY: 0.9, cabX: 0.55, cabY: 1.3 },
+      rastrojero: { L: 4.2, W: 1.6, lightY: 0.95, cabX: 0.9, cabY: 1.45 },
+      f100: { L: 5.3, W: 1.95, lightY: 1.05, cabX: 0.15, cabY: 1.65 },
+      mb1114: { L: 8, W: 2.3, lightY: 1.1, cabX: 2.8, cabY: 2.4 },
+    }
+    const lampM = new THREE.MeshStandardMaterial({ color: 0xfff2c0, emissive: 0xffe6a0, emissiveIntensity: 0.6, roughness: 0.3 })
+    const tailM = new THREE.MeshStandardMaterial({ color: 0xd42020, emissive: 0x800000, emissiveIntensity: 0.4, roughness: 0.3 })
+    for (const type of Object.keys(dims) as VType[]) {
+      const d = dims[type]
+      const spec = vehicleParts[type]
+      spec.parts.push(
+        { geo: box(0.12, 0.16, d.W * 0.98), mat: chromeM, off: [d.L / 2 + 0.05, 0.5, 0] },
+        { geo: box(0.12, 0.16, d.W * 0.98), mat: chromeM, off: [-d.L / 2 - 0.05, 0.5, 0] },
+        { geo: box(0.06, 0.16, 0.26), mat: lampM, off: [d.L / 2 + 0.03, d.lightY, d.W * 0.33] },
+        { geo: box(0.06, 0.16, 0.26), mat: lampM, off: [d.L / 2 + 0.03, d.lightY, -d.W * 0.33] },
+        { geo: box(0.06, 0.12, 0.22), mat: tailM, off: [-d.L / 2 - 0.03, d.lightY, d.W * 0.36] },
+        { geo: box(0.06, 0.12, 0.22), mat: tailM, off: [-d.L / 2 - 0.03, d.lightY, -d.W * 0.36] },
+        { geo: box(0.12, 0.1, 0.1), mat: chromeM, off: [d.cabX + 0.7, d.cabY + 0.05, d.W / 2 + 0.1] },
+        { geo: box(0.12, 0.1, 0.1), mat: chromeM, off: [d.cabX + 0.7, d.cabY + 0.05, -d.W / 2 - 0.1] },
+      )
+    }
     const wheelSetGeo = new THREE.CylinderGeometry(1, 1, 0.26, 12)
     wheelSetGeo.rotateX(Math.PI / 2)
     const allVehicleWheels: THREE.Matrix4[] = []
@@ -1458,23 +1614,19 @@ export class Scene3D {
     allVehicleWheels.forEach((m, i) => vWheels.setMatrixAt(i, m))
     this.scene.add(vWheels)
 
-    // Público: cuerpo + cabeza, colores de ropa variados.
-    const personBody = new THREE.CapsuleGeometry(0.2, 0.9, 3, 6)
-    const personHead = new THREE.SphereGeometry(0.13, 8, 6)
-    const bodiesP = new THREE.InstancedMesh(personBody, new THREE.MeshStandardMaterial({ roughness: 0.9 }), people.length)
-    const headsP = new THREE.InstancedMesh(personHead, new THREE.MeshStandardMaterial({ color: 0xc8956c, roughness: 0.8 }), people.length)
+    // Público: figuras por partes (piernas, torso, brazos, cabeza y gorra),
+    // con ropa de colores; algunos caminan por el terraplén.
+    const crowd = new CrowdPeople(people.length)
+    this.crowd = crowd
+    this.scene.add(crowd.group)
     people.forEach((pp, i) => {
-      const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), pp.rot)
       const h = 0.9 + rnd() * 0.25
-      bodiesP.setMatrixAt(i, new THREE.Matrix4().compose(new THREE.Vector3(pp.x, pp.y0 + 0.65 * h, pp.y), q, new THREE.Vector3(1, h, 1)))
-      headsP.setMatrixAt(i, new THREE.Matrix4().compose(new THREE.Vector3(pp.x, pp.y0 + 1.42 * h, pp.y), q, new THREE.Vector3(1, 1, 1)))
-      bodiesP.setColorAt(i, new THREE.Color(pp.color))
-      if (pp.walk) this.walkers.push({ index: i, x: pp.x, z: pp.y, y0: pp.y0, h, ...pp.walk })
+      const pants = [0x2a3a66, 0x111111, 0x8a7a5a, 0x3a3a3a, 0x5a6a8a][Math.floor(rnd() * 5)]
+      const cap = rnd() < 0.5 ? [0x111111, 0xd42020, 0xffffff, 0x1f5fd6][Math.floor(rnd() * 4)] : -1
+      crowd.setPerson(i, pp.x, pp.y0, pp.y, pp.rot, h, pp.color, pants, cap, 0)
+      if (pp.walk) this.walkers.push({ index: i, x: pp.x, z: pp.y, y0: pp.y0, h, shirt: pp.color, pants, cap, ...pp.walk })
     })
-    bodiesP.castShadow = true
-    this.scene.add(bodiesP, headsP)
-    this.peopleBodies = bodiesP
-    this.peopleHeads = headsP
+    crowd.commit()
 
     // Parrillas para el asado, con humo.
     const grillGeo = new THREE.BoxGeometry(0.9, 0.12, 0.5)
@@ -1848,39 +2000,52 @@ export class Scene3D {
     }
     const cx = this.center.x
     const cz = this.center.y
-    const tA = total * 0.5 // fin de la cenital
-    const tB = total - 4 // fin del vuelo
+    const n = this.track.points.length
+    // Tiempos de las etapas: cenital, vuelo por el final de la vuelta,
+    // travelling lateral por la grilla (una tarjeta por piloto) y llegada.
+    const tA = 8 // fin de la cenital
+    const tB = 22 // fin del vuelo, llegada a la línea de largada
+    const tC = total - 7 // fin del travelling por la grilla
 
     // A: cenital, orbitando despacio y bajando un poco.
     const ang = 0.6 + t * 0.03
-    const h = 430 - 110 * THREE.MathUtils.clamp(t / tA, 0, 1)
+    const h = 430 - 120 * THREE.MathUtils.clamp(t / tA, 0, 1)
     const cenPos = new THREE.Vector3(cx + Math.sin(ang) * 70, h, cz + Math.cos(ang) * 70)
     const cenLook = new THREE.Vector3(cx, 0, cz)
 
-    // B: vuelo por la pista hasta la grilla, con un desplazamiento lateral para pasar al lado de los autos.
-    const n = this.track.points.length
-    const i0 = n - 520
-    const i1 = n - 6
-    const u = smooth(tA - 2, tB, t)
-    const idx = i0 + (i1 - i0) * u
-    const p = this.track.pointAt(Math.round(idx))
-    const ahead = this.track.pointAt(Math.round(idx) + 22)
-    const nx = -Math.sin(p.heading)
-    const ny = Math.cos(p.heading)
-    const side = -this.track.outwardAt(Math.round(idx)) // lado interno
-    const flyPos = new THREE.Vector3(p.x + nx * 5 * side, this.track.groundHeight(p.x, p.y) + 2.4, p.y + ny * 5 * side)
-    const flyLook = new THREE.Vector3(ahead.x + nx * 1.5 * side, 1.0, ahead.y + ny * 1.5 * side)
+    // B: vuelo a ras de pista por el último tramo de la vuelta hasta la largada.
+    const uB = smooth(tA - 1, tB, t)
+    const idxB = n - 430 + 428 * uB
+    const pB = this.track.pointAtF(idxB)
+    const aB = this.track.pointAtF(idxB + 24)
+    const sideB = -this.track.outwardAt(Math.round(idxB))
+    const nxB = -Math.sin(pB.heading)
+    const nyB = Math.cos(pB.heading)
+    const flyPos = new THREE.Vector3(pB.x + nxB * 4.5 * sideB, this.track.groundHeight(pB.x, pB.y) + 3.0, pB.y + nyB * 4.5 * sideB)
+    const flyLook = new THREE.Vector3(aB.x, 1.0, aB.y)
 
-    // C: posición final de persecución detrás del jugador.
+    // C: travelling lateral desde la primera fila hacia atrás, mirando los autos de costado.
+    const uC = THREE.MathUtils.clamp((t - tB) / (tC - tB), 0, 1)
+    const idxC = n - 6 - 46 * uC
+    const pC = this.track.pointAtF(idxC)
+    const nxC = -Math.sin(pC.heading)
+    const nyC = Math.cos(pC.heading)
+    const sideC = -this.track.outwardAt(Math.round(idxC))
+    const dollyPos = new THREE.Vector3(pC.x + nxC * 8.5 * sideC, this.track.groundHeight(pC.x, pC.y) + 1.35, pC.y + nyC * 8.5 * sideC)
+    const pC2 = this.track.pointAtF(idxC + 1.5)
+    const dollyLook = new THREE.Vector3(pC2.x - nxC * 1.5 * sideC, 0.75, pC2.y - nyC * 1.5 * sideC)
+
+    // D: posición final de persecución detrás del jugador.
     const fx = Math.cos(player.heading)
     const fz = Math.sin(player.heading)
     const chasePos = new THREE.Vector3(player.x - fx * 7.5, player.height + 2.8, player.y - fz * 7.5)
     const chaseLook = new THREE.Vector3(player.x + fx * 6, player.height + 0.9, player.y + fz * 6)
 
-    const kAB = smooth(tA - 3, tA + 3, t)
-    const kBC = smooth(tB, total, t)
-    const pos = cenPos.clone().lerp(flyPos, kAB).lerp(chasePos, kBC)
-    const look = cenLook.clone().lerp(flyLook, kAB).lerp(chaseLook, kBC)
+    const kAB = smooth(tA - 2, tA + 2, t)
+    const kBC = smooth(tB - 1.5, tB + 1.5, t)
+    const kCD = smooth(tC, total, t)
+    const pos = cenPos.clone().lerp(flyPos, kAB).lerp(dollyPos, kBC).lerp(chasePos, kCD)
+    const look = cenLook.clone().lerp(flyLook, kAB).lerp(dollyLook, kBC).lerp(chaseLook, kCD)
     return { pos, look }
   }
 
@@ -1907,7 +2072,7 @@ export class Scene3D {
     this.first = false
     this.camera.position.copy(pos)
     this.camera.lookAt(look)
-    const fov = t < total * 0.5 ? 50 : 62
+    const fov = t < 8 ? 50 : t < 22 ? 66 : t < total - 7 ? 42 : 62
     this.camera.fov += (fov - this.camera.fov) * Math.min(1, dt * 2)
     this.camera.updateProjectionMatrix()
     this.sun.position.set(player.x - 130, 48, player.y - 90)
@@ -1993,24 +2158,17 @@ export class Scene3D {
 
   /** Gente que camina de un lado a otro por el terraplén. */
   private updateWalkers() {
-    if (!this.peopleBodies || !this.peopleHeads || this.walkers.length === 0) return
+    if (!this.crowd || this.walkers.length === 0) return
     for (const w of this.walkers) {
       const s = Math.sin(this.time * w.speed + w.phase)
       const dirSign = Math.cos(this.time * w.speed + w.phase) >= 0 ? 1 : -1
       const x = w.x + w.dx * w.amp * s
       const z = w.z + w.dz * w.amp * s
-      const bob = Math.abs(Math.sin(this.time * 6 + w.phase)) * 0.03
       const rot = -Math.atan2(w.dz * dirSign, w.dx * dirSign)
-      this.tmpQuat.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rot)
-      this.tmpPos.set(x, w.y0 + 0.65 * w.h + bob, z)
-      this.tmpScale.set(1, w.h, 1)
-      this.peopleBodies.setMatrixAt(w.index, this.tmpMatrix.compose(this.tmpPos, this.tmpQuat, this.tmpScale))
-      this.tmpPos.set(x, w.y0 + 1.42 * w.h + bob, z)
-      this.tmpScale.set(1, 1, 1)
-      this.peopleHeads.setMatrixAt(w.index, this.tmpMatrix.compose(this.tmpPos, this.tmpQuat, this.tmpScale))
+      const swing = Math.sin(this.time * 7 + w.phase) * 0.5
+      this.crowd.setPerson(w.index, x, w.y0, z, rot, w.h, w.shirt, w.pants, w.cap, swing)
     }
-    this.peopleBodies.instanceMatrix.needsUpdate = true
-    this.peopleHeads.instanceMatrix.needsUpdate = true
+    this.crowd.commit()
   }
 
   /** Ondulaciones de la tierra (metros) en un punto del mundo. */
@@ -2162,3 +2320,88 @@ export class Scene3D {
     this.renderer.dispose()
   }
 }
+
+
+/**
+ * Público por partes con instancias: piernas, torso, brazos, cabeza y gorra.
+ * `setPerson` ubica una figura; `swing` balancea brazos y piernas al caminar.
+ */
+class CrowdPeople {
+  readonly group = new THREE.Group()
+  private legs: THREE.InstancedMesh
+  private torso: THREE.InstancedMesh
+  private arms: THREE.InstancedMesh
+  private head: THREE.InstancedMesh
+  private cap: THREE.InstancedMesh
+  private m = new THREE.Matrix4()
+  private q = new THREE.Quaternion()
+  private p = new THREE.Vector3()
+  private sc = new THREE.Vector3()
+  private col = new THREE.Color()
+
+  constructor(count: number) {
+    const legGeo = new THREE.BoxGeometry(0.13, 0.82, 0.15)
+    legGeo.translate(0, 0.41, 0)
+    const torsoGeo = new THREE.BoxGeometry(0.42, 0.56, 0.24)
+    const armGeo = new THREE.BoxGeometry(0.1, 0.5, 0.1)
+    armGeo.translate(0, -0.25, 0)
+    const headGeo = new THREE.SphereGeometry(0.12, 10, 8)
+    const capGeo = new THREE.SphereGeometry(0.13, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2)
+    this.legs = new THREE.InstancedMesh(legGeo, new THREE.MeshStandardMaterial({ roughness: 0.9 }), count * 2)
+    this.torso = new THREE.InstancedMesh(torsoGeo, new THREE.MeshStandardMaterial({ roughness: 0.9 }), count)
+    this.arms = new THREE.InstancedMesh(armGeo, new THREE.MeshStandardMaterial({ roughness: 0.9 }), count * 2)
+    this.head = new THREE.InstancedMesh(headGeo, new THREE.MeshStandardMaterial({ color: 0xc8956c, roughness: 0.8 }), count)
+    this.cap = new THREE.InstancedMesh(capGeo, new THREE.MeshStandardMaterial({ roughness: 0.9 }), count)
+    for (const mesh of [this.legs, this.torso, this.arms, this.head, this.cap]) {
+      mesh.castShadow = true
+      this.group.add(mesh)
+    }
+  }
+
+  setPerson(i: number, x: number, y0: number, z: number, rot: number, h: number, shirt: number, pants: number, cap: number, swing: number) {
+    const cos = Math.cos(rot)
+    const sin = Math.sin(rot)
+    // Un punto en el espacio local de la persona (adelante = +x local) a mundo.
+    const local = (lx: number, ly: number, lz: number) => this.p.set(x + lx * cos + lz * sin, y0 + ly * h, z - lx * sin + lz * cos)
+    this.q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rot)
+    this.sc.set(1, h, 1)
+    // Piernas (balanceo opuesto).
+    for (const side of [-1, 1]) {
+      const swingQ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), side * swing * 0.6)
+      const qq = this.q.clone().multiply(swingQ)
+      local(0, 0, side * 0.09)
+      this.legs.setMatrixAt(i * 2 + (side > 0 ? 1 : 0), this.m.compose(this.p, qq, this.sc))
+      this.legs.setColorAt(i * 2 + (side > 0 ? 1 : 0), this.col.setHex(pants))
+    }
+    local(0, 1.1, 0)
+    this.torso.setMatrixAt(i, this.m.compose(this.p, this.q, this.sc))
+    this.torso.setColorAt(i, this.col.setHex(shirt))
+    for (const side of [-1, 1]) {
+      const swingQ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), -side * swing * 0.5)
+      const qq = this.q.clone().multiply(swingQ)
+      local(0, 1.36, side * 0.27)
+      this.arms.setMatrixAt(i * 2 + (side > 0 ? 1 : 0), this.m.compose(this.p, qq, this.sc))
+      this.arms.setColorAt(i * 2 + (side > 0 ? 1 : 0), this.col.setHex(shirt))
+    }
+    local(0, 1.52, 0)
+    this.sc.set(1, 1, 1)
+    this.head.setMatrixAt(i, this.m.compose(this.p, this.q, this.sc))
+    if (cap >= 0) {
+      local(0, 1.55, 0)
+      this.cap.setMatrixAt(i, this.m.compose(this.p, this.q, this.sc))
+      this.cap.setColorAt(i, this.col.setHex(cap))
+    } else {
+      this.cap.setMatrixAt(i, this.m.makeScale(0, 0, 0))
+    }
+  }
+
+  commit() {
+    for (const mesh of [this.legs, this.torso, this.arms, this.head, this.cap]) {
+      mesh.instanceMatrix.needsUpdate = true
+      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
+    }
+  }
+}
+
+/** Exportadas para previsualizar los banners en herramientas de desarrollo. */
+export { makeACTBanner, makeGABanner }
