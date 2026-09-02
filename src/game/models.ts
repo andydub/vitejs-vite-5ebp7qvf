@@ -329,19 +329,18 @@ function splitWheels(outer: THREE.Group): THREE.Group {
   body.castShadow = true
   body.name = 'body'
   result.add(body)
+  // La geometría de las ruedas generadas se descarta: en su lugar cada pivote
+  // recibe una rueda hecha por código (ver wheel.ts) con el radio y ancho medidos.
   wheels.forEach((wh, w) => {
     if (counts[w] < 20) return
     const zc = wh.side * ((wh.zInner + wh.zOuter) / 2)
-    const center = new THREE.Vector3(wh.cx, wh.cy, zc)
-    const mesh = new THREE.Mesh(build((t) => owner[t] === w, center), material)
-    mesh.castShadow = true
-    mesh.name = 'wheel_mesh'
     const pivot = new THREE.Object3D()
     pivot.name = `wheel_${wh.front ? 'f' : 'r'}_${wh.side < 0 ? 'l' : 'r'}`
-    pivot.position.copy(center)
+    pivot.position.set(wh.cx, wh.cy, zc)
     pivot.userData.radius = wh.r
+    pivot.userData.width = Math.max(0.16, wh.zOuter - wh.zInner)
+    pivot.userData.side = wh.side
     pivot.userData.baseY = wh.cy
-    pivot.add(mesh)
     result.add(pivot)
   })
   return result

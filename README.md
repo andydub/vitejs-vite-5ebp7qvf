@@ -53,3 +53,10 @@ Los autos 29 y 1 se reemplazan por modelos generados a partir de fotos si
 existen los archivos `public/models/car29.glb` y `public/models/car1.glb`
 (GLB, con o sin compresión meshopt). Si faltan, se usa el auto procedural.
 La orientación de cada modelo se ajusta en `src/game/models.ts` (`yaw`).
+
+## Audio
+
+- `public/audio/menu.mp3`: música del menú ("Velocidad Pura"). Arranca con la
+  primera interacción, baja durante la previa y se apaga al largar.
+- `public/audio/relato.mp3`: relato de Lucio Aguirre que suena en la previa; la
+  duración de la previa (`introDuration` en `race.ts`) sigue la del audio.

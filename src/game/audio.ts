@@ -61,3 +61,71 @@ export class EngineAudio {
     this.ctx = null
   }
 }
+
+/** Fuentes de audio: embebidas (página de un solo archivo) o del servidor. */
+declare global {
+  interface Window {
+    __SPORT4_AUDIO?: Record<string, string>
+  }
+}
+
+export function audioSrc(key: 'menu' | 'relato'): string {
+  const embedded = window.__SPORT4_AUDIO?.[key]
+  if (embedded) return embedded
+  return `${import.meta.env.BASE_URL}audio/${key}.mp3`
+}
+
+/** Reproductor simple con fundidos, para música y relato. */
+export class TrackPlayer {
+  private el: HTMLAudioElement
+  private fadeTimer: number | null = null
+
+  constructor(src: string, loop: boolean) {
+    this.el = new Audio(src)
+    this.el.loop = loop
+    this.el.preload = 'auto'
+    this.el.volume = 0
+  }
+
+  /** Intenta reproducir; si el navegador lo bloquea, devuelve false. */
+  async play(volume: number): Promise<boolean> {
+    this.el.volume = volume
+    try {
+      await this.el.play()
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  get playing() {
+    return !this.el.paused
+  }
+
+  fadeTo(volume: number, seconds: number, thenPause = false) {
+    if (this.fadeTimer !== null) window.clearInterval(this.fadeTimer)
+    const start = this.el.volume
+    const t0 = performance.now()
+    this.fadeTimer = window.setInterval(() => {
+      const k = Math.min(1, (performance.now() - t0) / (seconds * 1000))
+      this.el.volume = start + (volume - start) * k
+      if (k >= 1) {
+        if (this.fadeTimer !== null) window.clearInterval(this.fadeTimer)
+        this.fadeTimer = null
+        if (thenPause) this.el.pause()
+      }
+    }, 50)
+  }
+
+  stop() {
+    if (this.fadeTimer !== null) window.clearInterval(this.fadeTimer)
+    this.fadeTimer = null
+    this.el.pause()
+    this.el.currentTime = 0
+  }
+
+  dispose() {
+    this.stop()
+    this.el.src = ''
+  }
+}

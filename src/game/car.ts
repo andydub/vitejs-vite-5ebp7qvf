@@ -52,6 +52,11 @@ export class Car {
   /** Modelo 3D generado a partir de fotos; si falta se usa el auto procedural. */
   model: CarModelConfig | null = null
   modelHue = 0 // rotación de matiz (grados) para reteñir el modelo compartido
+  short = '' // nombre corto para la torre de tiempos
+  height = 0 // altura del terreno bajo el auto (m)
+  histP: number[] = [] // historial (progreso, tiempo) para calcular diferencias
+  histT: number[] = []
+  private histAcc = 0
   readonly skill: number // 0..1, afecta a la IA
 
   constructor(
@@ -140,6 +145,18 @@ export class Car {
     // Posición en pista.
     this.trackIndex = track.nearestIndex(this.x, this.y, this.trackIndex)
     this.onAsphalt = track.isOnAsphalt(this.x, this.y, this.trackIndex)
+    // Altura: el auto sube el bordo en vez de hundirse; suavizado para que no salte.
+    const targetH = track.groundHeight(this.x, this.y, this.trackIndex)
+    this.height += (targetH - this.height) * Math.min(1, dt * 14)
+    // Subir el lomo de tierra frena un poco.
+    if (targetH > this.height + 0.01) this.speed = Math.max(0, this.speed - (targetH - this.height) * 6 * dt * 60)
+    // Historial para las diferencias de tiempo.
+    this.histAcc += dt
+    if (this.histAcc >= 0.1) {
+      this.histAcc = 0
+      this.histP.push(this.progress)
+      this.histT.push(timeNow)
+    }
 
     const n = track.points.length
     let delta = this.trackIndex - this.lastIndex
@@ -176,6 +193,23 @@ export class Car {
     this.speed = 0
     this.lateralSpeed = 0
     this.steerAngle = 0
+    this.height = track.groundHeight(this.x, this.y, this.trackIndex)
+  }
+
+  /** Segundos que este auto lleva de ventaja sobre `behind` (mismo punto de pista). */
+  gapAhead(behind: Car, now: number): number {
+    const target = behind.progress
+    const P = this.histP
+    const T = this.histT
+    if (P.length === 0 || target > this.progress) return 0
+    let lo = 0
+    let hi = P.length - 1
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1
+      if (P[mid] >= target) hi = mid
+      else lo = mid + 1
+    }
+    return Math.max(0, now - T[lo])
   }
 
   get speedKmh() {

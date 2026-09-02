@@ -9,6 +9,7 @@ import { Lensflare, LensflareElement } from 'three/addons/objects/Lensflare.js'
 import { CAR_SPEC, type Car } from './car'
 import { Track } from './track'
 import { applyHueShift, loadCarModel, WHEEL_NAMES } from './models'
+import { buildWheel } from './wheel'
 
 // Convención: el mundo del juego es (x, y) en planta; en Three.js va a (x, 0, y).
 // Un rumbo θ (cos θ, sin θ) equivale a rotation.y = -θ con el auto mirando +X.
@@ -364,6 +365,119 @@ function makeBannerTexture(text: string, bg: string, fg: string, w = 1024, h = 1
   return canvasTexture(c, false)
 }
 
+/** Banner de la Asociación de Categorías Tradicionales (ACT): damero, óvalo y franja roja. */
+function makeACTBanner(): THREE.CanvasTexture {
+  const w = 1024
+  const h = 1024
+  const c = document.createElement('canvas')
+  c.width = w
+  c.height = h
+  const ctx = c.getContext('2d')!
+  ctx.fillStyle = '#f4f4f4'
+  ctx.fillRect(0, 0, w, h)
+  // Damero arriba y abajo.
+  const sq = 64
+  for (let y = 0; y < 3; y++) {
+    for (let x = 0; x < w / sq; x++) {
+      ctx.fillStyle = (x + y) % 2 ? '#111' : '#f4f4f4'
+      ctx.fillRect(x * sq, y * sq, sq, sq)
+    }
+  }
+  // Franja roja degradada abajo.
+  const g = ctx.createLinearGradient(0, h * 0.72, 0, h)
+  g.addColorStop(0, '#f4f4f4')
+  g.addColorStop(1, '#d42020')
+  ctx.fillStyle = g
+  ctx.fillRect(0, h * 0.72, w, h * 0.28)
+  // Foto azulada de autos (bandas de color simulando la foto).
+  ctx.fillStyle = '#6f8fbf'
+  ctx.fillRect(0, h * 0.56, w, h * 0.16)
+  ctx.fillStyle = '#c9b48a'
+  ctx.fillRect(0, h * 0.66, w, h * 0.06)
+  // Óvalo azul con ACT.
+  ctx.fillStyle = '#1d3f8f'
+  ctx.beginPath()
+  ctx.ellipse(w / 2, h * 0.4, 300, 150, 0, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.strokeStyle = '#f4f4f4'
+  ctx.lineWidth = 8
+  ctx.stroke()
+  ctx.fillStyle = '#f4f4f4'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.font = 'bold 42px sans-serif'
+  ctx.fillText('ASOCIACIÓN DE CATEGORÍAS', w / 2, h * 0.31)
+  ctx.font = 'bold 36px sans-serif'
+  ctx.fillText('TRADICIONALES', w / 2, h * 0.5)
+  ctx.font = '900 150px sans-serif'
+  ctx.fillStyle = '#d42020'
+  ctx.strokeStyle = '#f4f4f4'
+  ctx.lineWidth = 10
+  ctx.strokeText('ACT', w / 2, h * 0.405)
+  ctx.fillText('ACT', w / 2, h * 0.405)
+  ctx.fillStyle = '#333'
+  ctx.font = 'bold 30px sans-serif'
+  ctx.fillText('DESDE 1982', w / 2, h * 0.545)
+  // Escudos laterales.
+  for (const x of [120, w - 120]) {
+    for (const y of [h * 0.28, h * 0.42]) {
+      ctx.fillStyle = '#d42020'
+      ctx.beginPath()
+      ctx.arc(x, y, 42, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.fillStyle = '#f4f4f4'
+      ctx.beginPath()
+      ctx.arc(x, y, 30, 0, Math.PI * 2)
+      ctx.fill()
+    }
+  }
+  return canvasTexture(c, false)
+}
+
+/** Panel de la Municipalidad de General Alvear: arcos de colores y texto azul. */
+function makeGABanner(): THREE.CanvasTexture {
+  const w = 512
+  const h = 1024
+  const c = document.createElement('canvas')
+  c.width = w
+  c.height = h
+  const ctx = c.getContext('2d')!
+  ctx.fillStyle = '#ffffff'
+  ctx.fillRect(0, 0, w, h)
+  const arcs: [number, number, number, string][] = [
+    [140, 200, 110, '#2bb3a0'],
+    [380, 320, 90, '#f5a623'],
+    [120, 760, 120, '#8e3a9c'],
+    [400, 880, 100, '#e94e3d'],
+    [260, 520, 70, '#2f6db5'],
+  ]
+  ctx.lineWidth = 34
+  ctx.lineCap = 'round'
+  for (const [x, y, r, col] of arcs) {
+    ctx.strokeStyle = col
+    ctx.beginPath()
+    ctx.arc(x, y, r, Math.PI * 0.2, Math.PI * 1.3)
+    ctx.stroke()
+  }
+  ctx.fillStyle = '#1f4e9c'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.font = '500 54px sans-serif'
+  ctx.fillText('General', w / 2, h * 0.58)
+  ctx.font = '900 92px sans-serif'
+  ctx.fillText('ALVEAR', w / 2, h * 0.655)
+  ctx.font = '500 30px sans-serif'
+  ctx.fillStyle = '#2bb3a0'
+  ctx.fillText('Tierra de Oportunidades', w / 2, h * 0.715)
+  ctx.fillStyle = '#333'
+  ctx.font = '24px sans-serif'
+  ctx.fillText('Dirección de', w / 2, h * 0.78)
+  ctx.font = 'bold 26px sans-serif'
+  ctx.fillText('Deportes, Actividad', w / 2, h * 0.815)
+  ctx.fillText('Física y Recreación', w / 2, h * 0.85)
+  return canvasTexture(c, false)
+}
+
 /** Rejilla del radiador. */
 function makeGrilleTexture(): THREE.CanvasTexture {
   const c = document.createElement('canvas')
@@ -398,7 +512,6 @@ const netMat = new THREE.MeshStandardMaterial({ color: 0x111111, transparent: tr
 const aluMat = new THREE.MeshStandardMaterial({ color: 0xd8d8d8, roughness: 0.35, metalness: 0.8 })
 const suitMat = new THREE.MeshStandardMaterial({ color: 0x1d3f8f, roughness: 0.9 })
 const springMat = new THREE.MeshStandardMaterial({ color: 0xe0b000, roughness: 0.5, metalness: 0.3 })
-const spokeGeo = new THREE.BoxGeometry(0.05, 0.26, 0.06)
 let contactShadowTex: THREE.CanvasTexture | null = null
 let grilleTex: THREE.CanvasTexture | null = null
 
@@ -406,7 +519,7 @@ interface CarView {
   group: THREE.Group
   body: THREE.Group
   frontWheels: THREE.Object3D[]
-  wheels: THREE.Mesh[]
+  wheels: THREE.Object3D[]
   dust: THREE.Sprite[]
   dustAge: number[]
   dustNext: number
@@ -643,50 +756,29 @@ function buildCar(car: Car): CarView {
   group.add(contact)
 
   const frontWheels: THREE.Object3D[] = []
-  const wheels: THREE.Mesh[] = []
+  const wheels: THREE.Object3D[] = []
   for (const side of [-1, 1]) {
     const pivot = new THREE.Object3D()
     pivot.position.set(L * 0.36, 0.3, side * (W * 0.5))
-    const wm = new THREE.Mesh(wheelGeo, rubberMat)
-    wm.castShadow = true
+    const wm = buildWheel(0.3, 0.18, side)
     pivot.add(wm)
-    const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.03, 16), aluMat)
-    disc.rotation.x = Math.PI / 2
-    wm.add(disc)
-    for (let k = 0; k < 5; k++) {
-      const sp = new THREE.Mesh(spokeGeo, hubMat)
-      sp.rotation.z = (k / 5) * Math.PI * 2
-      sp.position.set(Math.sin(sp.rotation.z) * 0.12, Math.cos(sp.rotation.z) * 0.12, 0)
-      wm.add(sp)
-    }
     group.add(pivot)
     frontWheels.push(pivot)
     wheels.push(wm)
 
-    const rear = new THREE.Mesh(rearWheelGeo, rubberMat)
-    rear.castShadow = true
-    rear.position.set(-L * 0.4, 0.42, side * (W * 0.52))
-    group.add(rear)
-    const rim = new THREE.Mesh(rimGeo, hubMat)
-    rear.add(rim)
-    const nut = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.46, 6), cageMat)
-    nut.rotation.x = Math.PI / 2
-    rear.add(nut)
-    for (let k = 0; k < 6; k++) {
-      const sp = new THREE.Mesh(spokeGeo, cageMat)
-      sp.rotation.z = (k / 6) * Math.PI * 2
-      sp.position.set(Math.sin(sp.rotation.z) * 0.16, Math.cos(sp.rotation.z) * 0.16, side * 0.22)
-      sp.scale.set(1, 1, 0.3)
-      rear.add(sp)
-    }
+    const rearPivot = new THREE.Object3D()
+    rearPivot.position.set(-L * 0.4, 0.42, side * (W * 0.52))
+    const rear = buildWheel(0.42, 0.3, side)
+    rearPivot.add(rear)
+    group.add(rearPivot)
     wheels.push(rear)
   }
 
   const wheelNodes = [
     { node: frontWheels[0], baseY: 0.3, x: L * 0.36, z: -W * 0.5 },
     { node: frontWheels[1], baseY: 0.3, x: L * 0.36, z: W * 0.5 },
-    { node: wheels[1], baseY: 0.42, x: -L * 0.4, z: -W * 0.52 },
-    { node: wheels[3], baseY: 0.42, x: -L * 0.4, z: W * 0.52 },
+    { node: wheels[1].parent!, baseY: 0.42, x: -L * 0.4, z: -W * 0.52 },
+    { node: wheels[3].parent!, baseY: 0.42, x: -L * 0.4, z: W * 0.52 },
   ]
   return {
     group,
@@ -746,6 +838,9 @@ export class Scene3D {
   private grade!: ShaderPass
   private smoke: THREE.Sprite[] = []
   private flags: THREE.Mesh[] = []
+  private walkers: { index: number; x: number; z: number; y0: number; h: number; dx: number; dz: number; amp: number; speed: number; phase: number }[] = []
+  private peopleBodies: THREE.InstancedMesh | null = null
+  private peopleHeads: THREE.InstancedMesh | null = null
   private time = 0
   cameraMode: CameraMode = 'chase'
 
@@ -755,7 +850,7 @@ export class Scene3D {
     this.renderer.shadowMap.enabled = true
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping
-    this.renderer.toneMappingExposure = 0.95
+    this.renderer.toneMappingExposure = 1.0
     this.renderer.outputColorSpace = THREE.SRGBColorSpace
 
     this.camera = new THREE.PerspectiveCamera(62, 1, 0.5, 4000)
@@ -815,8 +910,15 @@ export class Scene3D {
         const wheelNodes: CarView['wheelNodes'] = []
         for (const name of WHEEL_NAMES) {
           const pivot = model.getObjectByName(name)
-          if (pivot && pivot.children[0]) {
-            view.modelWheels.push({ pivot, mesh: pivot.children[0], front: name.includes('_f_'), radius: (pivot.userData.radius as number) || 0.4 })
+          if (pivot) {
+            const radius = (pivot.userData.radius as number) || 0.34
+            const front = name.includes('_f_')
+            // Proporción real (185/60 R14): ancho ≈ 0,3 del diámetro adelante, algo más atrás.
+            const width = Math.min((pivot.userData.width as number) || 0.24, radius * (front ? 0.6 : 0.72))
+            const side = (pivot.userData.side as number) || Math.sign(pivot.position.z) || 1
+            const wheel = buildWheel(radius, width, side)
+            pivot.add(wheel)
+            view.modelWheels.push({ pivot, mesh: wheel, front: name.includes('_f_'), radius })
             wheelNodes.push({ node: pivot, baseY: pivot.position.y, x: pivot.position.x, z: pivot.position.z })
           }
         }
@@ -918,7 +1020,7 @@ export class Scene3D {
   }
 
   private buildLights() {
-    const hemi = new THREE.HemisphereLight(0x9fb8e0, 0x6a4a30, 0.42)
+    const hemi = new THREE.HemisphereLight(0x9fb8e0, 0x6a4a30, 0.55)
     this.scene.add(hemi)
     this.sun = new THREE.DirectionalLight(0xffd9a0, 2.3)
     this.sun.castShadow = true
@@ -1170,16 +1272,20 @@ export class Scene3D {
       this.scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0x777777 })))
     }
 
-    // --- Autos del público alrededor de toda la pista, sobre el terraplén ---
-    const bodyGeo = new THREE.BoxGeometry(4.3, 1.3, 1.85)
-    const cabinGeo = new THREE.BoxGeometry(2.1, 0.75, 1.65)
-    const palette = [0xf2f2f2, 0xd0d0d0, 0x9a9a9a, 0x2b2b2b, 0x8c1d1d, 0x1c3f94, 0x5a5a5a, 0xe6e6e6, 0x274e13, 0xb8b8b8, 0xffffff]
-    const spectators: { x: number; y: number; rot: number; color: number; y0?: number }[] = []
-    const pickups: { x: number; y: number; rot: number; color: number; y0: number }[] = []
-    const trucksRing: { x: number; y: number; rot: number; y0: number }[] = []
-    const people: { x: number; y: number; y0: number; color: number; rot: number }[] = []
+    // --- Vehículos del público: clásicos argentinos sobre el terraplén y en el paddock ---
+    type VType = 'falcon' | 'chevy' | 'torino' | 'taunus' | 'p504' | 'c3cv' | 'mehari' | 'rastrojero' | 'f100' | 'mb1114'
+    interface Placement {
+      type: VType
+      x: number
+      y: number
+      y0: number
+      rot: number
+      color: number
+    }
+    const placements: Placement[] = []
+    const people: { x: number; y: number; y0: number; color: number; rot: number; walk?: { dx: number; dz: number; amp: number; speed: number; phase: number } }[] = []
     const grills: { x: number; y: number; y0: number }[] = []
-    const flags: { x: number; y: number; y0: number; color: number }[] = []
+    const flags: { x: number; y: number; y0: number; color: number; text?: string }[] = []
     const ringSpot = (i: number, extra: number) => {
       const p = t.points[i]
       const nx = -Math.sin(p.heading)
@@ -1188,120 +1294,166 @@ export class Scene3D {
       const off = half + 19 + extra
       return { x: p.x + nx * off * outward, y: p.y + ny * off * outward, heading: p.heading, outward, nx, ny }
     }
+    const classicPalette: Record<VType, number[]> = {
+      falcon: [0xe8e2cf, 0x8fa9c9, 0x3b6e3a, 0xb8322b, 0xd9c36c, 0xf2f2f2, 0x2b2b2b],
+      chevy: [0xd9d9d9, 0x9c1b1b, 0x2a4b8f, 0xd4a017, 0x3b3b3b, 0xe8e2cf],
+      torino: [0xb8322b, 0xf2f2f2, 0x1f2a44, 0xd4a017, 0x5a8f5a],
+      taunus: [0xc9c9c9, 0x2f6db5, 0xd9c36c, 0xb8322b, 0x7a5c3a],
+      p504: [0xf2f2f2, 0xb8b8b8, 0x2b4a2b, 0x8c1d1d, 0xc9a86a],
+      c3cv: [0xbfbfbf, 0xe8e2cf, 0xf5a623, 0x8fa9c9, 0x9bc1a0],
+      mehari: [0xf5a623, 0x6aa84f, 0xe8e2cf, 0xffd500, 0xd42020],
+      rastrojero: [0xb8322b, 0x2f6db5, 0x9a9a9a, 0x3b6e3a],
+      f100: [0x2f6db5, 0xd9d9d9, 0x8c1d1d, 0x3b6e3a, 0xd4a017],
+      mb1114: [0xf5a623, 0x2f6db5, 0xd42020, 0x2bb3a0],
+    }
+    const pickType = (paddock: boolean): VType => {
+      const r = rnd()
+      if (paddock) {
+        if (r < 0.25) return 'f100'
+        if (r < 0.4) return 'mb1114'
+        if (r < 0.55) return 'rastrojero'
+      }
+      if (r < 0.18) return 'falcon'
+      if (r < 0.3) return 'chevy'
+      if (r < 0.4) return 'torino'
+      if (r < 0.5) return 'taunus'
+      if (r < 0.6) return 'p504'
+      if (r < 0.68) return 'c3cv'
+      if (r < 0.74) return 'mehari'
+      if (r < 0.84) return 'rastrojero'
+      if (r < 0.94) return 'f100'
+      return 'mb1114'
+    }
+    const colorFor = (type: VType) => classicPalette[type][Math.floor(rnd() * classicPalette[type].length)]
     for (let i = 0; i < n; i += 6) {
       if (rnd() < 0.1) continue
       const spot = ringSpot(i, rnd() * 6)
-      const r = rnd()
+      const type = pickType(false)
       const rot = -spot.heading + Math.PI / 2 + (rnd() - 0.5) * 0.35
-      if (r < 0.55) spectators.push({ x: spot.x, y: spot.y, rot, color: palette[Math.floor(rnd() * palette.length)], y0: EMB_Y })
-      else if (r < 0.88) pickups.push({ x: spot.x, y: spot.y, rot, color: palette[Math.floor(rnd() * palette.length)], y0: EMB_Y })
-      else trucksRing.push({ x: spot.x, y: spot.y, rot, y0: EMB_Y })
-      // Gente alrededor del vehículo, mirando a la pista.
+      placements.push({ type, x: spot.x, y: spot.y, y0: EMB_Y, rot, color: colorFor(type) })
+      // Gente alrededor del vehículo, mirando a la pista; algunos caminan por el terraplén.
       const group = 1 + Math.floor(rnd() * 4)
       for (let g = 0; g < group; g++) {
         const along = (rnd() - 0.5) * 5
         const toward = 3 + rnd() * 2
+        const walking = rnd() < 0.22
         people.push({
           x: spot.x + Math.cos(spot.heading) * along - spot.nx * toward * spot.outward,
           y: spot.y + Math.sin(spot.heading) * along - spot.ny * toward * spot.outward,
           y0: EMB_Y,
-          color: [0xffffff, 0x1f2a44, 0x8c1d1d, 0x2a7f3a, 0xf2c94c, 0x222222, 0x5b8fd6][Math.floor(rnd() * 7)],
+          color: [0xffffff, 0x1f2a44, 0x8c1d1d, 0x2a7f3a, 0xf2c94c, 0x222222, 0x5b8fd6, 0x74acdf][Math.floor(rnd() * 8)],
           rot: -spot.heading + (spot.outward > 0 ? Math.PI / 2 : -Math.PI / 2),
+          walk: walking ? { dx: Math.cos(spot.heading), dz: Math.sin(spot.heading), amp: 4 + rnd() * 6, speed: 0.25 + rnd() * 0.2, phase: rnd() * 6.28 } : undefined,
         })
       }
-      if (rnd() < 0.35) {
-        grills.push({ x: spot.x + Math.cos(spot.heading) * 3.5, y: spot.y + Math.sin(spot.heading) * 3.5, y0: EMB_Y })
+      if (type === 'mb1114') {
+        // Gente arriba de la caja del camión.
+        const fx = Math.cos(-rot)
+        const fz = Math.sin(-rot)
+        for (let g = 0; g < 3; g++) {
+          people.push({ x: spot.x - fx * 1.2 + (rnd() - 0.5) * 4, y: spot.y - fz * 1.2 + (rnd() - 0.5) * 1.2, y0: EMB_Y + 2.9, color: [0xffffff, 0x1f2a44, 0x8c1d1d, 0xf2c94c][g % 4], rot })
+        }
       }
+      if (rnd() < 0.35) grills.push({ x: spot.x + Math.cos(spot.heading) * 3.5, y: spot.y + Math.sin(spot.heading) * 3.5, y0: EMB_Y })
       if (rnd() < 0.12) flags.push({ x: spot.x + spot.nx * 4 * spot.outward, y: spot.y + spot.ny * 4 * spot.outward, y0: EMB_Y, color: [0x74acdf, 0xffffff, 0xd42020, 0xf2c94c][Math.floor(rnd() * 4)] })
     }
-    // Paddock: autos, camionetas y trailers en filas.
+    // Banderas grandes con nombres de pilotos, en la recta principal y en el curvón.
+    const named: [number, string, string, string][] = [
+      [n - 70, 'OLIVERA', '#d4202a', '#ffffff'],
+      [n - 140, 'CARRERAS', '#1d5bd8', '#ffffff'],
+      [n - 250, 'DEL POZO', '#c9ccd1', '#1f5fd6'],
+    ]
+    for (const [idx, text, bg, fg] of named) {
+      const spot = ringSpot(idx, -3)
+      flags.push({ x: spot.x, y: spot.y, y0: EMB_Y, color: 0xffffff, text: `${text}|${bg}|${fg}` })
+    }
+    // Paddock: filas de autos, camionetas y camiones.
     const pd = this.paddock
     for (let r = -3; r <= 3; r++) {
       for (let c = -12; c <= 12; c++) {
         if (rnd() < 0.3) continue
         const along = c * 11 + (rnd() - 0.5) * 3
         const across = r * 12 + (rnd() - 0.5) * 3
-        spectators.push({
+        const type = pickType(true)
+        placements.push({
+          type,
           x: pd.cx + pd.ax * along - pd.ay * across,
           y: pd.cy + pd.ay * along + pd.ax * across,
+          y0: 0,
           rot: -Math.atan2(pd.ay, pd.ax) + (rnd() < 0.5 ? 0 : Math.PI / 2) + (rnd() - 0.5) * 0.3,
-          color: palette[Math.floor(rnd() * palette.length)],
+          color: colorFor(type),
         })
       }
     }
-    const bodies = new THREE.InstancedMesh(bodyGeo, new THREE.MeshStandardMaterial({ roughness: 0.35, metalness: 0.4 }), spectators.length)
-    const cabins = new THREE.InstancedMesh(cabinGeo, new THREE.MeshStandardMaterial({ color: 0x2a3340, roughness: 0.2, metalness: 0.5 }), spectators.length)
-    const wheelSetGeo = new THREE.CylinderGeometry(0.34, 0.34, 0.25, 10)
+
+    // Piezas de cada tipo (x adelante, y arriba, z derecha); la primera pieza lleva el color.
+    interface Part {
+      geo: THREE.BufferGeometry
+      mat: THREE.MeshStandardMaterial
+      off: [number, number, number]
+      colored?: boolean
+    }
+    const paintMat = () => new THREE.MeshStandardMaterial({ roughness: 0.4, metalness: 0.35 })
+    const glassM = new THREE.MeshStandardMaterial({ color: 0x2a3340, roughness: 0.2, metalness: 0.5 })
+    const woodM = new THREE.MeshStandardMaterial({ color: 0x7a5a3a, roughness: 0.9 })
+    const darkM = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.8 })
+    const chromeM = new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.3, metalness: 0.8 })
+    const box = (x: number, y: number, z: number) => new THREE.BoxGeometry(x, y, z)
+    const roofGeo3cv = new THREE.CylinderGeometry(0.72, 0.72, 2.2, 12, 1, false, 0, Math.PI)
+    roofGeo3cv.rotateZ(Math.PI / 2)
+    roofGeo3cv.rotateY(Math.PI / 2)
+    roofGeo3cv.scale(1, 0.55, 1)
+    const cabGeo1114 = new THREE.BoxGeometry(2.2, 2.1, 2.3)
+    const vehicleParts: Record<VType, { parts: Part[]; wheelR: number; wb: number; tw: number }> = {
+      falcon: { parts: [{ geo: box(4.7, 0.6, 1.78), mat: paintMat(), off: [0, 0.72, 0], colored: true }, { geo: box(2.2, 0.6, 1.62), mat: glassM, off: [-0.1, 1.32, 0] }, { geo: box(0.1, 0.12, 1.5), mat: chromeM, off: [2.35, 0.55, 0] }], wheelR: 0.34, wb: 1.45, tw: 0.8 },
+      chevy: { parts: [{ geo: box(4.9, 0.62, 1.82), mat: paintMat(), off: [0, 0.72, 0], colored: true }, { geo: box(2.1, 0.58, 1.64), mat: glassM, off: [-0.2, 1.32, 0] }, { geo: box(0.1, 0.12, 1.6), mat: chromeM, off: [2.45, 0.55, 0] }], wheelR: 0.35, wb: 1.5, tw: 0.82 },
+      torino: { parts: [{ geo: box(4.75, 0.6, 1.78), mat: paintMat(), off: [0, 0.72, 0], colored: true }, { geo: box(2.0, 0.56, 1.6), mat: glassM, off: [-0.35, 1.3, 0] }, { geo: box(0.1, 0.12, 1.5), mat: chromeM, off: [2.37, 0.55, 0] }], wheelR: 0.34, wb: 1.45, tw: 0.8 },
+      taunus: { parts: [{ geo: box(4.4, 0.58, 1.7), mat: paintMat(), off: [0, 0.7, 0], colored: true }, { geo: box(2.1, 0.58, 1.55), mat: glassM, off: [-0.1, 1.28, 0] }], wheelR: 0.32, wb: 1.35, tw: 0.76 },
+      p504: { parts: [{ geo: box(4.5, 0.6, 1.7), mat: paintMat(), off: [0, 0.72, 0], colored: true }, { geo: box(2.2, 0.6, 1.55), mat: glassM, off: [-0.05, 1.32, 0] }], wheelR: 0.33, wb: 1.4, tw: 0.76 },
+      c3cv: { parts: [{ geo: box(3.8, 0.7, 1.5), mat: paintMat(), off: [0, 0.78, 0], colored: true }, { geo: roofGeo3cv, mat: paintMat(), off: [-0.2, 1.13, 0], colored: true }, { geo: box(1.2, 0.5, 1.4), mat: glassM, off: [0.7, 1.3, 0] }], wheelR: 0.3, wb: 1.2, tw: 0.66 },
+      mehari: { parts: [{ geo: box(3.5, 0.7, 1.5), mat: paintMat(), off: [0, 0.72, 0], colored: true }, { geo: box(0.08, 0.8, 1.5), mat: darkM, off: [-0.4, 1.45, 0] }, { geo: box(0.06, 0.5, 1.4), mat: glassM, off: [0.55, 1.3, 0] }], wheelR: 0.3, wb: 1.15, tw: 0.66 },
+      rastrojero: { parts: [{ geo: box(1.6, 0.95, 1.6), mat: paintMat(), off: [0.9, 1.25, 0], colored: true }, { geo: box(1.1, 0.5, 1.5), mat: paintMat(), off: [2.05, 0.95, 0], colored: true }, { geo: box(2.3, 0.5, 1.6), mat: woodM, off: [-1.0, 0.98, 0] }, { geo: box(4.2, 0.4, 1.5), mat: darkM, off: [0, 0.6, 0] }, { geo: box(0.05, 0.5, 1.4), mat: glassM, off: [1.65, 1.45, 0] }], wheelR: 0.32, wb: 1.4, tw: 0.72 },
+      f100: { parts: [{ geo: box(5.3, 0.55, 1.95), mat: paintMat(), off: [0, 0.7, 0], colored: true }, { geo: box(1.9, 0.5, 1.85), mat: paintMat(), off: [1.6, 1.22, 0], colored: true }, { geo: box(1.7, 0.9, 1.85), mat: paintMat(), off: [0.15, 1.45, 0], colored: true }, { geo: box(1.6, 0.5, 1.7), mat: glassM, off: [0.15, 1.65, 0] }, { geo: box(2.5, 0.55, 1.9), mat: paintMat(), off: [-1.4, 1.22, 0], colored: true }, { geo: box(0.12, 0.2, 1.9), mat: chromeM, off: [2.65, 0.6, 0] }], wheelR: 0.4, wb: 1.7, tw: 0.86 },
+      mb1114: { parts: [{ geo: cabGeo1114, mat: paintMat(), off: [2.8, 1.95, 0], colored: true }, { geo: box(8, 0.5, 2.3), mat: darkM, off: [0, 0.75, 0] }, { geo: box(5.4, 1.9, 2.3), mat: woodM, off: [-1.2, 1.95, 0] }, { geo: box(0.05, 0.9, 2.1), mat: glassM, off: [3.9, 2.3, 0] }, { geo: box(0.1, 0.4, 2.3), mat: chromeM, off: [3.95, 0.8, 0] }], wheelR: 0.5, wb: 2.6, tw: 1.0 },
+    }
+    const wheelSetGeo = new THREE.CylinderGeometry(1, 1, 0.26, 12)
     wheelSetGeo.rotateX(Math.PI / 2)
     const allVehicleWheels: THREE.Matrix4[] = []
-    const addWheels = (x: number, y: number, y0: number, rot: number, wb: number, tw: number) => {
+    const addWheels = (x: number, y: number, y0: number, rot: number, wb: number, tw: number, r: number) => {
       const fx = Math.cos(-rot)
       const fz = Math.sin(-rot)
       for (const a of [-1, 1]) {
         for (const b of [-1, 1]) {
           allVehicleWheels.push(
             new THREE.Matrix4().compose(
-              new THREE.Vector3(x + fx * a * wb - fz * b * tw, y0 + 0.34, y + fz * a * wb + fx * b * tw),
+              new THREE.Vector3(x + fx * a * wb - fz * b * tw, y0 + r, y + fz * a * wb + fx * b * tw),
               new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), rot),
-              new THREE.Vector3(1, 1, 1),
+              new THREE.Vector3(r, r, 1),
             ),
           )
         }
       }
     }
-    spectators.forEach((s, i) => {
-      const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), s.rot)
-      const y0 = s.y0 ?? 0
-      bodies.setMatrixAt(i, new THREE.Matrix4().compose(new THREE.Vector3(s.x, y0 + 0.75, s.y), q, new THREE.Vector3(1, 1, 1)))
-      cabins.setMatrixAt(i, new THREE.Matrix4().compose(new THREE.Vector3(s.x, y0 + 1.75, s.y), q, new THREE.Vector3(1, 1, 1)))
-      bodies.setColorAt(i, new THREE.Color(s.color))
-      addWheels(s.x, s.y, y0, s.rot, 1.4, 0.85)
-    })
-    bodies.castShadow = true
-    cabins.castShadow = true
-    this.scene.add(bodies, cabins)
-
-    // Camionetas: cabina adelante y caja abierta atrás.
-    const puBodyGeo = new THREE.BoxGeometry(5.2, 1.0, 1.95)
-    const puCabGeo = new THREE.BoxGeometry(2.0, 1.1, 1.85)
-    const puBedGeo = new THREE.BoxGeometry(2.4, 0.5, 1.85)
-    const puBodies = new THREE.InstancedMesh(puBodyGeo, new THREE.MeshStandardMaterial({ roughness: 0.35, metalness: 0.4 }), pickups.length)
-    const puCabs = new THREE.InstancedMesh(puCabGeo, new THREE.MeshStandardMaterial({ color: 0x2a3340, roughness: 0.2, metalness: 0.5 }), pickups.length)
-    const puBeds = new THREE.InstancedMesh(puBedGeo, new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.8 }), pickups.length)
-    pickups.forEach((s, i) => {
-      const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), s.rot)
-      const fx = Math.cos(-s.rot)
-      const fz = Math.sin(-s.rot)
-      puBodies.setMatrixAt(i, new THREE.Matrix4().compose(new THREE.Vector3(s.x, s.y0 + 0.9, s.y), q, new THREE.Vector3(1, 1, 1)))
-      puCabs.setMatrixAt(i, new THREE.Matrix4().compose(new THREE.Vector3(s.x + fx * 0.6, s.y0 + 1.95, s.y + fz * 0.6), q, new THREE.Vector3(1, 1, 1)))
-      puBeds.setMatrixAt(i, new THREE.Matrix4().compose(new THREE.Vector3(s.x - fx * 1.4, s.y0 + 1.65, s.y - fz * 1.4), q, new THREE.Vector3(1, 1, 1)))
-      puBodies.setColorAt(i, new THREE.Color(s.color))
-      addWheels(s.x, s.y, s.y0, s.rot, 1.6, 0.9)
-    })
-    puBodies.castShadow = true
-    puCabs.castShadow = true
-    this.scene.add(puBodies, puCabs, puBeds)
-
-    // Camiones en el terraplén (la gente mira desde arriba de la caja).
-    const trBodyGeo = new THREE.BoxGeometry(8, 2.6, 2.5)
-    const trCabGeo = new THREE.BoxGeometry(2.2, 2.4, 2.4)
-    const trBodies = new THREE.InstancedMesh(trBodyGeo, new THREE.MeshStandardMaterial({ color: 0xe8e2d2, roughness: 0.5 }), trucksRing.length)
-    const trCabs = new THREE.InstancedMesh(trCabGeo, new THREE.MeshStandardMaterial({ roughness: 0.4, metalness: 0.3 }), trucksRing.length)
-    trucksRing.forEach((s, i) => {
-      const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), s.rot)
-      const fx = Math.cos(-s.rot)
-      const fz = Math.sin(-s.rot)
-      trBodies.setMatrixAt(i, new THREE.Matrix4().compose(new THREE.Vector3(s.x - fx * 1.2, s.y0 + 2.1, s.y - fz * 1.2), q, new THREE.Vector3(1, 1, 1)))
-      trCabs.setMatrixAt(i, new THREE.Matrix4().compose(new THREE.Vector3(s.x + fx * 4.0, s.y0 + 1.9, s.y + fz * 4.0), q, new THREE.Vector3(1, 1, 1)))
-      trCabs.setColorAt(i, new THREE.Color([0xd42020, 0x1c3f94, 0xffffff, 0x2a7f3a][i % 4]))
-      addWheels(s.x, s.y, s.y0, s.rot, 2.6, 1.1)
-      // Gente arriba del camión.
-      for (let g = 0; g < 3; g++) {
-        people.push({ x: s.x - fx * 1.2 + (rnd() - 0.5) * 5, y: s.y - fz * 1.2 + (rnd() - 0.5) * 1.5, y0: s.y0 + 3.4, color: [0xffffff, 0x1f2a44, 0x8c1d1d, 0xf2c94c][g % 4], rot: s.rot })
+    for (const type of Object.keys(vehicleParts) as VType[]) {
+      const list = placements.filter((pl) => pl.type === type)
+      if (!list.length) continue
+      const spec = vehicleParts[type]
+      for (const part of spec.parts) {
+        const mesh = new THREE.InstancedMesh(part.geo, part.mat, list.length)
+        list.forEach((pl, i) => {
+          const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), pl.rot)
+          const fx = Math.cos(-pl.rot)
+          const fz = Math.sin(-pl.rot)
+          const ox = part.off[0]
+          const oz = part.off[2]
+          mesh.setMatrixAt(i, new THREE.Matrix4().compose(new THREE.Vector3(pl.x + fx * ox - fz * oz, pl.y0 + part.off[1], pl.y + fz * ox + fx * oz), q, new THREE.Vector3(1, 1, 1)))
+          if (part.colored) mesh.setColorAt(i, new THREE.Color(pl.color))
+        })
+        mesh.castShadow = true
+        this.scene.add(mesh)
       }
-    })
-    trBodies.castShadow = true
-    this.scene.add(trBodies, trCabs)
+      list.forEach((pl) => addWheels(pl.x, pl.y, pl.y0, pl.rot, spec.wb, spec.tw, spec.wheelR))
+    }
     const vWheels = new THREE.InstancedMesh(wheelSetGeo, rubberMat, allVehicleWheels.length)
     allVehicleWheels.forEach((m, i) => vWheels.setMatrixAt(i, m))
     this.scene.add(vWheels)
@@ -1317,9 +1469,12 @@ export class Scene3D {
       bodiesP.setMatrixAt(i, new THREE.Matrix4().compose(new THREE.Vector3(pp.x, pp.y0 + 0.65 * h, pp.y), q, new THREE.Vector3(1, h, 1)))
       headsP.setMatrixAt(i, new THREE.Matrix4().compose(new THREE.Vector3(pp.x, pp.y0 + 1.42 * h, pp.y), q, new THREE.Vector3(1, 1, 1)))
       bodiesP.setColorAt(i, new THREE.Color(pp.color))
+      if (pp.walk) this.walkers.push({ index: i, x: pp.x, z: pp.y, y0: pp.y0, h, ...pp.walk })
     })
     bodiesP.castShadow = true
     this.scene.add(bodiesP, headsP)
+    this.peopleBodies = bodiesP
+    this.peopleHeads = headsP
 
     // Parrillas para el asado, con humo.
     const grillGeo = new THREE.BoxGeometry(0.9, 0.12, 0.5)
@@ -1351,12 +1506,20 @@ export class Scene3D {
     // Banderas.
     const poleGeo = new THREE.CylinderGeometry(0.03, 0.03, 4, 5)
     const flagGeo = new THREE.PlaneGeometry(1.4, 0.9, 6, 1)
+    const bigFlagGeo = new THREE.PlaneGeometry(2.6, 1.5, 8, 1)
     flags.forEach((f) => {
       const pole = new THREE.Mesh(poleGeo, hubMat)
       pole.position.set(f.x, f.y0 + 2, f.y)
       this.scene.add(pole)
-      const flag = new THREE.Mesh(flagGeo, new THREE.MeshStandardMaterial({ color: f.color, side: THREE.DoubleSide, roughness: 0.9 }))
-      flag.position.set(f.x + 0.7, f.y0 + 3.5, f.y)
+      let mat: THREE.MeshStandardMaterial
+      if (f.text) {
+        const [txt, bg, fg] = f.text.split('|')
+        mat = new THREE.MeshStandardMaterial({ map: makeBannerTexture(txt, bg, fg, 1024, 512), side: THREE.DoubleSide, roughness: 0.9 })
+      } else {
+        mat = new THREE.MeshStandardMaterial({ color: f.color, side: THREE.DoubleSide, roughness: 0.9 })
+      }
+      const flag = new THREE.Mesh(f.text ? bigFlagGeo : flagGeo, mat)
+      flag.position.set(f.x + (f.text ? 1.3 : 0.7), f.y0 + 3.5, f.y)
       flag.userData.phase = rnd() * 6
       this.scene.add(flag)
       this.flags.push(flag)
@@ -1416,32 +1579,135 @@ export class Scene3D {
     trucks.castShadow = true
     this.scene.add(trucks)
 
-    // Torre de control chica junto a la largada.
+    // Mangrullo de transmisión y fiscalización, a la izquierda de la largada
+    // (lado exterior): bloque inferior con los paneles de la Municipalidad y
+    // el banner de ACT, piso superior con baranda y gente con micrófono, y el
+    // podio adelante.
     const s0 = t.points[0]
     const outward0 = outwardAt(s0)
     const tnx = -Math.sin(s0.heading)
     const tny = Math.cos(s0.heading)
-    const tower = new THREE.Group()
-    const towerBody = new THREE.Mesh(new THREE.BoxGeometry(3.2, 2.4, 2.6), new THREE.MeshStandardMaterial({ color: 0xf0ede4 }))
-    towerBody.position.y = 4.4
-    towerBody.castShadow = true
-    tower.add(towerBody)
-    const towerWin = new THREE.Mesh(new THREE.BoxGeometry(3.25, 1.0, 2.65), glassMat)
-    towerWin.position.y = 4.7
-    tower.add(towerWin)
-    for (const [dx, dz] of [
-      [-1.6, -1.2],
-      [1.6, -1.2],
-      [-1.6, 1.2],
-      [1.6, 1.2],
-    ]) {
-      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 3.2, 6), cageMat)
-      leg.position.set(dx * 0.8, 1.6, dz * 0.9)
-      tower.add(leg)
+    const mang = new THREE.Group()
+    const whiteM = new THREE.MeshStandardMaterial({ color: 0xf2efe6, roughness: 0.85 })
+    const lower = new THREE.Mesh(new THREE.BoxGeometry(3, 3.2, 8), whiteM)
+    lower.position.set(0, 1.6, 0)
+    lower.castShadow = true
+    lower.receiveShadow = true
+    mang.add(lower)
+    // Cara hacia la pista (−X local): paneles GA a los lados y ACT al centro.
+    const gaTex = makeGABanner()
+    const gaMat = new THREE.MeshStandardMaterial({ map: gaTex, roughness: 0.8 })
+    for (const z of [-2.9, 2.9]) {
+      const panel = new THREE.Mesh(new THREE.PlaneGeometry(1.7, 3.0), gaMat)
+      panel.position.set(-1.51, 1.6, z)
+      panel.rotation.y = -Math.PI / 2
+      mang.add(panel)
     }
-    tower.position.set(s0.x - Math.cos(s0.heading) * 8 + tnx * (half + 12) * outward0, 0, s0.y - Math.sin(s0.heading) * 8 + tny * (half + 12) * outward0)
-    tower.rotation.y = -s0.heading
-    this.scene.add(tower)
+    const act = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 3.0), new THREE.MeshStandardMaterial({ map: makeACTBanner(), roughness: 0.8 }))
+    act.position.set(-1.52, 1.65, 0)
+    act.rotation.y = -Math.PI / 2
+    mang.add(act)
+    // Piso superior, baranda y casilla.
+    const deck = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.15, 8.4), new THREE.MeshStandardMaterial({ color: 0x8a7a66, roughness: 0.9 }))
+    deck.position.y = 3.27
+    deck.castShadow = true
+    mang.add(deck)
+    const railMat = new THREE.MeshStandardMaterial({ color: 0x444444, metalness: 0.6, roughness: 0.5 })
+    const railGeo = new THREE.CylinderGeometry(0.025, 0.025, 1, 6)
+    const addRail = (a: THREE.Vector3, b: THREE.Vector3) => {
+      const len = a.distanceTo(b)
+      const m = new THREE.Mesh(railGeo, railMat)
+      m.scale.y = len
+      m.position.copy(a).lerp(b, 0.5)
+      m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize())
+      mang.add(m)
+    }
+    for (let z = -4.2; z <= 4.2; z += 1.4) {
+      addRail(new THREE.Vector3(-1.7, 3.35, z), new THREE.Vector3(-1.7, 4.45, z))
+    }
+    addRail(new THREE.Vector3(-1.7, 4.45, -4.2), new THREE.Vector3(-1.7, 4.45, 4.2))
+    addRail(new THREE.Vector3(-1.7, 3.9, -4.2), new THREE.Vector3(-1.7, 3.9, 4.2))
+    for (const z of [-4.2, 4.2]) {
+      addRail(new THREE.Vector3(-1.7, 4.45, z), new THREE.Vector3(1.7, 4.45, z))
+      addRail(new THREE.Vector3(1.7, 3.35, z), new THREE.Vector3(1.7, 4.45, z))
+    }
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(8.4, 1.1), netMat)
+    mesh.position.set(-1.7, 3.9, 0)
+    mesh.rotation.y = -Math.PI / 2
+    mang.add(mesh)
+    const hut = new THREE.Mesh(new THREE.BoxGeometry(1.6, 2.3, 4), whiteM)
+    hut.position.set(0.9, 4.5, -1.5)
+    hut.castShadow = true
+    mang.add(hut)
+    const roofHut = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.08, 4.4), new THREE.MeshStandardMaterial({ color: 0x8a8f96, metalness: 0.6, roughness: 0.4 }))
+    roofHut.position.set(0.8, 5.7, -1.5)
+    roofHut.rotation.z = 0.12
+    mang.add(roofHut)
+    // Parlantes.
+    for (const z of [-4.6, 4.6]) {
+      const spk = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.9, 0.5), darkM)
+      spk.position.set(-1.2, 0.45, z)
+      mang.add(spk)
+    }
+    // Gente en el mangrullo: relator con micrófono y comisarios.
+    const suitCols = [0x222222, 0xd42020, 0x1f2a44, 0x8c8c8c, 0xffffff, 0x2a7f3a]
+    for (let k = 0; k < 6; k++) {
+      const person = new THREE.Group()
+      const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.2, 0.9, 3, 8), new THREE.MeshStandardMaterial({ color: suitCols[k], roughness: 0.9 }))
+      body.position.y = 0.65
+      person.add(body)
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 8), new THREE.MeshStandardMaterial({ color: 0xc8956c }))
+      head.position.y = 1.42
+      person.add(head)
+      const cap = new THREE.Mesh(new THREE.SphereGeometry(0.14, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshStandardMaterial({ color: k % 2 ? 0x111111 : 0xd42020 }))
+      cap.position.y = 1.44
+      person.add(cap)
+      if (k === 1) {
+        const mic = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.25, 6), darkM)
+        mic.position.set(-0.25, 1.25, 0.05)
+        mic.rotation.z = 0.5
+        person.add(mic)
+      }
+      person.position.set(-1.1, 3.35, -3.5 + k * 1.4)
+      person.rotation.y = -Math.PI / 2
+      mang.add(person)
+    }
+    // Podio.
+    const podiumTex = (num: string, col: string) => {
+      const c = document.createElement('canvas')
+      c.width = 256
+      c.height = 256
+      const ctx = c.getContext('2d')!
+      ctx.fillStyle = '#f4f4f4'
+      ctx.fillRect(0, 0, 256, 256)
+      ctx.fillStyle = col
+      ctx.beginPath()
+      ctx.arc(128, 128, 80, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.fillStyle = '#ffffff'
+      ctx.font = '900 110px sans-serif'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.fillText(num, 128, 134)
+      return new THREE.MeshStandardMaterial({ map: canvasTexture(c, false), roughness: 0.9 })
+    }
+    const podium: [string, string, number, number][] = [
+      ['1', '#d4a017', 1.0, 0],
+      ['2', '#9a9a9a', 0.7, -1.3],
+      ['3', '#b87333', 0.5, 1.3],
+    ]
+    for (const [num, col, hgt, z] of podium) {
+      const step = new THREE.Mesh(new THREE.BoxGeometry(1.2, hgt, 1.2), [whiteM, whiteM, whiteM, whiteM, podiumTex(num, col), whiteM])
+      step.position.set(-2.6, hgt / 2, z)
+      step.castShadow = true
+      mang.add(step)
+    }
+    // Ubicación: junto a la largada, del lado exterior, mirando a la pista.
+    const mangOff = half + 7.4
+    mang.position.set(s0.x + Math.cos(s0.heading) * 6 + tnx * mangOff * outward0, 0, s0.y + Math.sin(s0.heading) * 6 + tny * mangOff * outward0)
+    // La cara −X local debe mirar a la pista: girar según el lado.
+    mang.rotation.y = Math.atan2(-tny * outward0, tnx * outward0)
+    this.scene.add(mang)
 
     // --- Monte: arbustos bajos por todos lados, salvo pista y paddock ---
     const bushGeo = new THREE.IcosahedronGeometry(1, 1)
@@ -1571,6 +1837,86 @@ export class Scene3D {
     this.camera.updateProjectionMatrix()
   }
 
+  /**
+   * Cámara de la previa: vista cenital del circuito, descenso, vuelo a ras de
+   * pista pasando junto a los autos en la grilla y llegada detrás del jugador.
+   */
+  private introCamera(t: number, total: number, player: Car): { pos: THREE.Vector3; look: THREE.Vector3 } {
+    const smooth = (a: number, b: number, x: number) => {
+      const k = THREE.MathUtils.clamp((x - a) / (b - a), 0, 1)
+      return k * k * (3 - 2 * k)
+    }
+    const cx = this.center.x
+    const cz = this.center.y
+    const tA = total * 0.5 // fin de la cenital
+    const tB = total - 4 // fin del vuelo
+
+    // A: cenital, orbitando despacio y bajando un poco.
+    const ang = 0.6 + t * 0.03
+    const h = 430 - 110 * THREE.MathUtils.clamp(t / tA, 0, 1)
+    const cenPos = new THREE.Vector3(cx + Math.sin(ang) * 70, h, cz + Math.cos(ang) * 70)
+    const cenLook = new THREE.Vector3(cx, 0, cz)
+
+    // B: vuelo por la pista hasta la grilla, con un desplazamiento lateral para pasar al lado de los autos.
+    const n = this.track.points.length
+    const i0 = n - 520
+    const i1 = n - 6
+    const u = smooth(tA - 2, tB, t)
+    const idx = i0 + (i1 - i0) * u
+    const p = this.track.pointAt(Math.round(idx))
+    const ahead = this.track.pointAt(Math.round(idx) + 22)
+    const nx = -Math.sin(p.heading)
+    const ny = Math.cos(p.heading)
+    const side = -this.track.outwardAt(Math.round(idx)) // lado interno
+    const flyPos = new THREE.Vector3(p.x + nx * 5 * side, this.track.groundHeight(p.x, p.y) + 2.4, p.y + ny * 5 * side)
+    const flyLook = new THREE.Vector3(ahead.x + nx * 1.5 * side, 1.0, ahead.y + ny * 1.5 * side)
+
+    // C: posición final de persecución detrás del jugador.
+    const fx = Math.cos(player.heading)
+    const fz = Math.sin(player.heading)
+    const chasePos = new THREE.Vector3(player.x - fx * 7.5, player.height + 2.8, player.y - fz * 7.5)
+    const chaseLook = new THREE.Vector3(player.x + fx * 6, player.height + 0.9, player.y + fz * 6)
+
+    const kAB = smooth(tA - 3, tA + 3, t)
+    const kBC = smooth(tB, total, t)
+    const pos = cenPos.clone().lerp(flyPos, kAB).lerp(chasePos, kBC)
+    const look = cenLook.clone().lerp(flyLook, kAB).lerp(chaseLook, kBC)
+    return { pos, look }
+  }
+
+  /** Cámara de la previa, llamada por el bucle principal mientras dura. */
+  renderIntro(cars: Car[], player: Car, t: number, total: number, dt: number) {
+    this.time += dt
+    for (const c of cars) {
+      const v = this.views.get(c.id)!
+      v.group.position.set(c.x, c.height, c.y)
+      v.group.rotation.y = -c.heading
+    }
+    for (const f of this.flags) f.rotation.y = Math.sin(this.time * 2 + (f.userData.phase as number)) * 0.25
+    this.updateWalkers()
+    for (const sp of this.smoke) {
+      const a = (this.time * 0.18 + (sp.userData.phase as number)) % 1
+      const base = sp.userData.base as THREE.Vector3
+      sp.position.set(base.x + (sp.userData.drift as number) * a * 6, base.y + a * 7, base.z + a * 2)
+      sp.scale.setScalar(0.6 + a * 3.5)
+      ;(sp.material as THREE.SpriteMaterial).opacity = 0.4 * (1 - a) * Math.min(1, a * 6)
+    }
+    const { pos, look } = this.introCamera(t, total, player)
+    this.camPos.copy(pos)
+    this.camTarget.copy(look)
+    this.first = false
+    this.camera.position.copy(pos)
+    this.camera.lookAt(look)
+    const fov = t < total * 0.5 ? 50 : 62
+    this.camera.fov += (fov - this.camera.fov) * Math.min(1, dt * 2)
+    this.camera.updateProjectionMatrix()
+    this.sun.position.set(player.x - 130, 48, player.y - 90)
+    this.sun.target.position.set(player.x, 0, player.y)
+    this.sun.target.updateMatrixWorld()
+    this.grade.uniforms.time.value = this.time % 100
+    this.composer.render()
+  }
+
   update(cars: Car[], player: Car, dt: number) {
     this.time += dt
     // Humo de los asados: sube, se abre y se desvanece en ciclo.
@@ -1585,9 +1931,10 @@ export class Scene3D {
       f.rotation.y = Math.sin(this.time * 2 + (f.userData.phase as number)) * 0.25
       f.rotation.z = Math.sin(this.time * 3.1 + (f.userData.phase as number)) * 0.08
     }
+    this.updateWalkers()
     for (const c of cars) {
       const v = this.views.get(c.id)!
-      v.group.position.set(c.x, 0, c.y)
+      v.group.position.set(c.x, c.height, c.y)
       v.group.rotation.y = -c.heading
       this.updateSuspension(c, v, dt)
       for (const fw of v.frontWheels) fw.rotation.y = -c.steerAngle
@@ -1606,16 +1953,17 @@ export class Scene3D {
     const fz = Math.sin(player.heading)
     let desired: THREE.Vector3
     let look: THREE.Vector3
+    const hy = player.height
     if (this.cameraMode === 'far') {
-      desired = new THREE.Vector3(player.x - fx * 16, 9, player.y - fz * 16)
-      look = new THREE.Vector3(player.x + fx * 8, 0.5, player.y + fz * 8)
+      desired = new THREE.Vector3(player.x - fx * 16, hy + 9, player.y - fz * 16)
+      look = new THREE.Vector3(player.x + fx * 8, hy + 0.5, player.y + fz * 8)
     } else if (this.cameraMode === 'hood') {
-      desired = new THREE.Vector3(player.x - fx * 0.3, 1.55, player.y - fz * 0.3)
-      look = new THREE.Vector3(player.x + fx * 30, 1.0, player.y + fz * 30)
+      desired = new THREE.Vector3(player.x - fx * 0.3, hy + 1.55, player.y - fz * 0.3)
+      look = new THREE.Vector3(player.x + fx * 30, hy + 1.0, player.y + fz * 30)
     } else {
       const back = 7.5 + player.speed * 0.06
-      desired = new THREE.Vector3(player.x - fx * back, 2.8 + player.speed * 0.01, player.y - fz * back)
-      look = new THREE.Vector3(player.x + fx * 6, 0.9, player.y + fz * 6)
+      desired = new THREE.Vector3(player.x - fx * back, hy + 2.8 + player.speed * 0.01, player.y - fz * back)
+      look = new THREE.Vector3(player.x + fx * 6, hy + 0.9, player.y + fz * 6)
     }
     if (this.first) {
       this.camPos.copy(desired)
@@ -1641,6 +1989,28 @@ export class Scene3D {
 
     this.grade.uniforms.time.value = this.time % 100
     this.composer.render()
+  }
+
+  /** Gente que camina de un lado a otro por el terraplén. */
+  private updateWalkers() {
+    if (!this.peopleBodies || !this.peopleHeads || this.walkers.length === 0) return
+    for (const w of this.walkers) {
+      const s = Math.sin(this.time * w.speed + w.phase)
+      const dirSign = Math.cos(this.time * w.speed + w.phase) >= 0 ? 1 : -1
+      const x = w.x + w.dx * w.amp * s
+      const z = w.z + w.dz * w.amp * s
+      const bob = Math.abs(Math.sin(this.time * 6 + w.phase)) * 0.03
+      const rot = -Math.atan2(w.dz * dirSign, w.dx * dirSign)
+      this.tmpQuat.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rot)
+      this.tmpPos.set(x, w.y0 + 0.65 * w.h + bob, z)
+      this.tmpScale.set(1, w.h, 1)
+      this.peopleBodies.setMatrixAt(w.index, this.tmpMatrix.compose(this.tmpPos, this.tmpQuat, this.tmpScale))
+      this.tmpPos.set(x, w.y0 + 1.42 * w.h + bob, z)
+      this.tmpScale.set(1, 1, 1)
+      this.peopleHeads.setMatrixAt(w.index, this.tmpMatrix.compose(this.tmpPos, this.tmpQuat, this.tmpScale))
+    }
+    this.peopleBodies.instanceMatrix.needsUpdate = true
+    this.peopleHeads.instanceMatrix.needsUpdate = true
   }
 
   /** Ondulaciones de la tierra (metros) en un punto del mundo. */
@@ -1675,7 +2045,7 @@ export class Scene3D {
     for (const w of v.wheelNodes) {
       const wx = c.x + w.x * cos - w.z * sin
       const wz = c.y + w.x * sin + w.z * cos
-      const h = this.groundBump(wx, wz, c.onAsphalt)
+      const h = THREE.MathUtils.clamp(this.track.groundHeight(wx, wz, c.trackIndex) - c.height, -0.25, 0.25) + this.groundBump(wx, wz, c.onAsphalt)
       w.node.position.y = w.baseY + h
       sum += h
       if (w.x > 0) {
@@ -1738,7 +2108,7 @@ export class Scene3D {
     for (const side of [-1, 1]) {
       const slot = c.id * MARKS_PER_CAR * 2 + (v.markIndex % (MARKS_PER_CAR * 2))
       v.markIndex++
-      this.tmpPos.set(c.x - fx * L * 0.4 - fz * side * W * 0.52, 0.05, c.y - fz * L * 0.4 + fx * side * W * 0.52)
+      this.tmpPos.set(c.x - fx * L * 0.4 - fz * side * W * 0.52, c.height + 0.05, c.y - fz * L * 0.4 + fx * side * W * 0.52)
       this.tmpMatrix.compose(this.tmpPos, this.tmpQuat, this.tmpScale)
       this.marks.setMatrixAt(slot, this.tmpMatrix)
     }
@@ -1767,7 +2137,7 @@ export class Scene3D {
         const side = Math.random() < 0.5 ? -1 : 1
         const fx = Math.cos(c.heading)
         const fz = Math.sin(c.heading)
-        sprite.position.set(c.x - fx * 1.5 - fz * side * 0.9, 0.35, c.y - fz * 1.5 + fx * side * 0.9)
+        sprite.position.set(c.x - fx * 1.5 - fz * side * 0.9, c.height + 0.35, c.y - fz * 1.5 + fx * side * 0.9)
         sprite.scale.setScalar(0.9)
         sprite.userData.drift = (Math.random() - 0.5) * 1.5
       }

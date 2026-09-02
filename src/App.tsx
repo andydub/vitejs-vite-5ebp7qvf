@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import './App.css'
-import { Race } from './game/race'
+import { Race, RIVALS, PLAYER_SPEC, type TowerRow } from './game/race'
 import { InputManager } from './game/input'
-import { EngineAudio } from './game/audio'
+import { EngineAudio, TrackPlayer, audioSrc } from './game/audio'
 import { drawMinimap } from './game/render'
 import { Scene3D, type CameraMode } from './game/scene3d'
 import { TRACK_LENGTH_M } from './game/track'
@@ -26,6 +26,9 @@ interface HudState {
   countdown: number
   phase: string
   offTrack: boolean
+  tower: TowerRow[]
+  time: number
+  introTotal: number
 }
 
 interface ResultRow {
@@ -40,6 +43,63 @@ interface ResultRow {
 
 type Screen = 'menu' | 'race' | 'results'
 
+/** Grilla completa en orden de cajón, para las tarjetas de la previa. */
+const GRID = [...RIVALS, PLAYER_SPEC]
+
+/**
+ * Sobreimpresos de la previa: título del circuito, tarjetas de pilotos con
+ * barrido de luz y la placa del relator. `t` es el tiempo de la previa.
+ */
+function IntroOverlay({ t, total, onSkip }: { t: number; total: number; onSkip: () => void }) {
+  const titleEnd = 7
+  const perDriver = Math.max(1.6, (total * 0.5 - titleEnd - 1) / GRID.length)
+  const driverIdx = Math.floor((t - titleEnd) / perDriver)
+  const driver = t >= titleEnd && driverIdx < GRID.length ? GRID[driverIdx] : null
+  const driverT = t - titleEnd - driverIdx * perDriver
+  const flight = t > total * 0.5
+  return (
+    <div className="intro">
+      <div className="flare a" />
+      <div className="flare b" />
+      {t < titleEnd && (
+        <div className="intro-title" style={{ opacity: t < 0.6 ? t / 0.6 : t > titleEnd - 0.8 ? (titleEnd - t) / 0.8 : 1 }}>
+          <p className="eyebrow sweep">Categorías Tradicionales · Mendoza</p>
+          <h1 className="sweep">Autódromo Víctor García</h1>
+          <p className="sub">General Alvear · Sport 4 · Final</p>
+        </div>
+      )}
+      {driver && (
+        <div key={driverIdx} className="driver-card" style={{ opacity: driverT < 0.3 ? driverT / 0.3 : driverT > perDriver - 0.3 ? (perDriver - driverT) / 0.3 : 1 }}>
+          <div className="num" style={{ background: driver.color, color: driver.cage }}>
+            {driver.number}
+          </div>
+          <div className="txt">
+            <p className="slot">Cajón {driverIdx + 1}</p>
+            <h2 className="sweep">{driver.name}</h2>
+            <p className="team">{driver.number === 1 ? 'Tu auto' : 'Sport 4'}</p>
+          </div>
+        </div>
+      )}
+      {flight && (
+        <div className="lower-third">
+          <p className="slot">Última final de la jornada</p>
+          <h2 className="sweep">Sport 4 · Categorías Tradicionales</h2>
+        </div>
+      )}
+      <div className="relator">
+        <div className="avatar">LA</div>
+        <div>
+          <p className="slot">Relata</p>
+          <b>Lucio Aguirre</b>
+        </div>
+      </div>
+      <button className="skip" onClick={onSkip}>
+        Saltar previa (Espacio)
+      </button>
+    </div>
+  )
+}
+
 export default function App() {
   const [screen, setScreen] = useState<Screen>('menu')
   const [laps, setLaps] = useState(5)
@@ -49,11 +109,42 @@ export default function App() {
   const minimapRef = useRef<HTMLCanvasElement>(null)
   const raceRef = useRef<Race | null>(null)
   const inputRef = useRef(new InputManager())
+  const musicRef = useRef<TrackPlayer | null>(null)
+  const skipRef = useRef<() => void>(() => {})
+  const [musicOn, setMusicOn] = useState(false)
+
+  // Música del menú: arranca con la primera interacción (los navegadores bloquean el autoplay).
+  useEffect(() => {
+    if (screen !== 'menu') return
+    if (!musicRef.current) musicRef.current = new TrackPlayer(audioSrc('menu'), true)
+    const music = musicRef.current
+    let done = false
+    const tryPlay = () => {
+      if (done) return
+      music.play(0.7).then((ok) => {
+        if (ok) {
+          done = true
+          setMusicOn(true)
+          music.fadeTo(0.7, 1)
+        }
+      })
+    }
+    tryPlay()
+    if (music.playing) music.fadeTo(0.7, 1.5)
+    window.addEventListener('pointerdown', tryPlay)
+    window.addEventListener('keydown', tryPlay)
+    return () => {
+      window.removeEventListener('pointerdown', tryPlay)
+      window.removeEventListener('keydown', tryPlay)
+    }
+  }, [screen])
 
   const startRace = useCallback(() => {
-    raceRef.current = new Race(laps, 'Vos')
+    raceRef.current = new Race(laps, '')
     setResults([])
     setScreen('race')
+    // La música baja durante la previa (relato) y se apaga al largar.
+    musicRef.current?.fadeTo(0.18, 2)
   }, [laps])
 
   useEffect(() => {
@@ -68,9 +159,22 @@ export default function App() {
     input.attach()
     const audio = new EngineAudio()
     audio.start()
+    const relato = new TrackPlayer(audioSrc('relato'), false)
+    void relato.play(1)
+    let musicMuted = false
+    const skipIntro = () => {
+      race.skipIntro()
+      relato.fadeTo(0, 0.8, true)
+    }
+    const onSkipKey = (e: KeyboardEvent) => {
+      if ((e.key === ' ' || e.key === 'Enter') && race.phase === 'intro') skipIntro()
+    }
+    window.addEventListener('keydown', onSkipKey)
+    skipRef.current = skipIntro
 
     let raf = 0
     let last = performance.now()
+    const introStart = performance.now()
     let acc = 0
     let hudTimer = 0
     const FIXED = 1 / 120
@@ -98,13 +202,26 @@ export default function App() {
       if (input.consumeCamera()) {
         scene.cameraMode = CAMERA_MODES[(CAMERA_MODES.indexOf(scene.cameraMode) + 1) % CAMERA_MODES.length]
       }
+      if (race.phase === 'intro') {
+        race.setIntroTime((now - introStart) / 1000)
+        acc = 0
+      }
       while (acc >= FIXED) {
         race.step(FIXED, controls)
         acc -= FIXED
       }
 
       const p = race.player
-      scene.update(race.cars, p, dt)
+      if (race.phase === 'intro') {
+        scene.renderIntro(race.cars, p, race.time, race.introDuration, dt)
+      } else {
+        if (!musicMuted) {
+          musicMuted = true
+          musicRef.current?.fadeTo(0, 1.5, true)
+          relato.fadeTo(0, 1, true)
+        }
+        scene.update(race.cars, p, dt)
+      }
       audio.update(p.speed, race.phase === 'racing' ? controls.throttle : 0, dt)
 
       const dpr = Math.min(window.devicePixelRatio || 1, 2)
@@ -126,6 +243,9 @@ export default function App() {
           countdown: race.countdown,
           phase: race.phase,
           offTrack: !p.onAsphalt,
+          tower: race.tower(),
+          time: race.time,
+          introTotal: race.introDuration,
         })
       }
 
@@ -153,11 +273,14 @@ export default function App() {
     return () => {
       cancelAnimationFrame(raf)
       window.removeEventListener('resize', resize)
+      window.removeEventListener('keydown', onSkipKey)
       input.detach()
       audio.stop()
+      relato.dispose()
       scene.dispose()
     }
   }, [screen])
+
 
   const touch = inputRef.current.touch
   const bind = (key: keyof typeof touch) => ({
@@ -197,6 +320,7 @@ export default function App() {
           <button className="primary" onClick={startRace}>
             Largar
           </button>
+          <p className="help music">{musicOn ? '♪ Velocidad Pura' : '♪ Tocá en cualquier lado para la música'}</p>
           <p className="help">
             Flechas o WASD para manejar · Espacio o ↓ frena · R te devuelve a la pista · C cambia la cámara. En celular
             usá los botones en pantalla.
@@ -251,8 +375,9 @@ export default function App() {
   return (
     <div className="game">
       <canvas ref={canvasRef} />
-      <canvas ref={minimapRef} className="minimap" />
-      {hud && (
+      <canvas ref={minimapRef} className="minimap" hidden={hud?.phase === 'intro'} />
+      {hud && hud.phase === 'intro' && <IntroOverlay t={hud.time} total={hud.introTotal} onSkip={() => skipRef.current()} />}
+      {hud && hud.phase !== 'intro' && (
         <>
           <div className="hud top-left">
             <div className="pos">
@@ -272,6 +397,18 @@ export default function App() {
               </div>
             </div>
           </div>
+          {(hud.phase === 'racing' || hud.phase === 'finished') && (
+            <div className="hud tower">
+              {hud.tower.map((r) => (
+                <div key={r.number} className={`row${r.isPlayer ? ' me' : ''}`}>
+                  <span className="p">{r.pos}</span>
+                  <span className="bar" style={{ background: r.color }} />
+                  <span className="n">{r.short}</span>
+                  <span className="g">{r.gap}</span>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="hud speed">
             <b>{Math.round(hud.speed)}</b> km/h
             {hud.offTrack && <div className="warn">¡Afuera!</div>}
@@ -282,7 +419,7 @@ export default function App() {
           {hud.phase === 'racing' && hud.lapTime < 1.5 && hud.lap === 1 && <div className="countdown go">¡Largaron!</div>}
         </>
       )}
-      <div className="touch">
+      <div className="touch" hidden={hud?.phase === 'intro'}>
         <div className="group">
           <button {...bind('left')}>◀</button>
           <button {...bind('right')}>▶</button>
@@ -296,7 +433,7 @@ export default function App() {
           </button>
         </div>
       </div>
-      <div className="topbar">
+      <div className="topbar" hidden={hud?.phase === 'intro'}>
         <button className="quit" onClick={() => (inputRef.current.touch.reset = true)}>
           A pista (R)
         </button>

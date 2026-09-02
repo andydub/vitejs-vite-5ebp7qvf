@@ -126,6 +126,11 @@
   background: rgba(200, 50, 50, 0.6);
 }
 
+.topbar[hidden],
+.touch[hidden],
+.minimap[hidden] {
+  display: none !important;
+}
 .topbar {
   position: absolute;
   top: 16px;
@@ -249,4 +254,255 @@
   display: flex;
   gap: 12px;
   justify-content: center;
+}
+
+/* Torre de tiempos estilo Fórmula 1 */
+.hud.tower {
+  top: 160px;
+  left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-shadow: none;
+}
+.hud.tower .row {
+  display: grid;
+  grid-template-columns: 22px 4px 118px 62px;
+  align-items: center;
+  gap: 6px;
+  background: rgba(10, 12, 18, 0.72);
+  padding: 4px 8px 4px 6px;
+  border-radius: 3px;
+  transition: transform 0.4s ease;
+}
+.hud.tower .row.me {
+  background: rgba(255, 213, 0, 0.85);
+  color: #111;
+}
+.hud.tower .p {
+  text-align: center;
+  font-weight: 800;
+}
+.hud.tower .bar {
+  width: 4px;
+  height: 16px;
+  border-radius: 1px;
+}
+.hud.tower .n {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hud.tower .g {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.9;
+}
+@media (max-width: 700px) {
+  .hud.tower {
+    display: none;
+  }
+}
+
+/* Previa cinematográfica */
+.intro {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  font-family: system-ui, sans-serif;
+}
+.intro .flare {
+  position: absolute;
+  width: 60vmax;
+  height: 60vmax;
+  border-radius: 50%;
+  mix-blend-mode: screen;
+  filter: blur(40px);
+  opacity: 0.55;
+  animation: flareMove 9s ease-in-out infinite alternate;
+}
+.intro .flare.a {
+  background: radial-gradient(circle, rgba(255, 210, 120, 0.7), rgba(255, 160, 60, 0) 60%);
+  top: -20vmax;
+  left: -10vmax;
+}
+.intro .flare.b {
+  background: radial-gradient(circle, rgba(120, 180, 255, 0.5), rgba(80, 120, 255, 0) 60%);
+  bottom: -25vmax;
+  right: -15vmax;
+  animation-delay: -4s;
+}
+@keyframes flareMove {
+  from {
+    transform: translate(0, 0) scale(1);
+  }
+  to {
+    transform: translate(12vmax, 8vmax) scale(1.25);
+  }
+}
+.intro .sweep {
+  background: linear-gradient(100deg, #fff 0%, #fff 35%, #ffe08a 50%, #fff 65%, #fff 100%);
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: sweep 2.4s linear infinite;
+}
+@keyframes sweep {
+  from {
+    background-position: 120% 0;
+  }
+  to {
+    background-position: -120% 0;
+  }
+}
+.intro-title {
+  position: absolute;
+  left: 50%;
+  top: 16%;
+  transform: translateX(-50%);
+  text-align: center;
+  color: #fff;
+  text-shadow: 0 4px 24px rgba(0, 0, 0, 0.6);
+}
+.intro-title h1 {
+  font-size: clamp(32px, 6vw, 84px);
+  font-weight: 900;
+  letter-spacing: -0.01em;
+  margin: 8px 0;
+  text-wrap: balance;
+}
+.intro-title .eyebrow {
+  font-size: clamp(11px, 1.4vw, 16px);
+  letter-spacing: 0.3em;
+}
+.intro-title .sub {
+  font-size: clamp(14px, 2vw, 24px);
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  opacity: 0.9;
+}
+.driver-card {
+  position: absolute;
+  left: 50%;
+  bottom: 18%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 14px 26px 14px 14px;
+  background: linear-gradient(90deg, rgba(8, 10, 16, 0.85), rgba(8, 10, 16, 0.55));
+  border-left: 4px solid #ffd500;
+  border-radius: 6px;
+  color: #fff;
+  animation: cardIn 0.5s ease-out;
+  min-width: min(520px, 80vw);
+}
+@keyframes cardIn {
+  from {
+    transform: translateX(-50%) translateY(20px);
+    filter: blur(6px);
+  }
+  to {
+    transform: translateX(-50%) translateY(0);
+    filter: blur(0);
+  }
+}
+.driver-card .num {
+  width: 72px;
+  height: 72px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  font-size: 36px;
+  font-weight: 900;
+}
+.driver-card h2 {
+  margin: 2px 0;
+  font-size: clamp(22px, 3.2vw, 40px);
+  font-weight: 800;
+  line-height: 1.05;
+}
+.intro .slot {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: #ffd500;
+}
+.driver-card .team {
+  margin: 0;
+  opacity: 0.7;
+  font-size: 13px;
+}
+.lower-third {
+  position: absolute;
+  left: 6%;
+  bottom: 14%;
+  padding: 12px 22px;
+  background: rgba(8, 10, 16, 0.7);
+  border-left: 4px solid #ffd500;
+  color: #fff;
+  animation: cardIn 0.6s ease-out;
+  transform: none;
+}
+.lower-third h2 {
+  margin: 4px 0 0;
+  font-size: clamp(18px, 2.4vw, 30px);
+}
+.relator {
+  position: absolute;
+  left: 24px;
+  top: 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #fff;
+  background: rgba(8, 10, 16, 0.6);
+  padding: 8px 14px 8px 8px;
+  border-radius: 40px;
+}
+.relator .avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #1d3f8f, #d42020);
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  background-size: cover;
+}
+.relator b {
+  display: block;
+  font-size: 15px;
+}
+.skip {
+  position: absolute;
+  right: 24px;
+  bottom: 24px;
+  pointer-events: auto;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.help.music {
+  color: #ffd500;
+  opacity: 0.9;
+}
+@media (prefers-reduced-motion: reduce) {
+  .intro .flare,
+  .intro .sweep,
+  .driver-card,
+  .lower-third {
+    animation: none;
+  }
 }

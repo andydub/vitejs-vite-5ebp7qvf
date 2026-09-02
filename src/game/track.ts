@@ -16,6 +16,22 @@ export interface TrackPoint extends Vec2 {
 export const TRACK_LENGTH_M = 1400
 export const TRACK_WIDTH_M = 11
 
+/** Perfil transversal de las bermas (offset desde el borde de pista, altura). Ambos lados. */
+export const BERM_PROFILE: { off: number; y: number }[] = [
+  { off: -0.2, y: 0.03 },
+  { off: 1.6, y: 0.42 },
+  { off: 3.2, y: 0.28 },
+  { off: 6, y: 0 },
+]
+/** Perfil del terraplén del público (solo del lado exterior). */
+export const EMBANKMENT_PROFILE: { off: number; y: number }[] = [
+  { off: 10, y: 0 },
+  { off: 14, y: 1.3 },
+  { off: 30, y: 1.3 },
+  { off: 35, y: 0 },
+]
+export const TRACK_SURFACE_Y = 0.04
+
 // Puntos de control calcados de la imagen satelital (píxeles de la captura,
 // origen arriba a la izquierda; ~0,47 m por píxel). El trazado se escala
 // después para que el desarrollo total sea de 1400 m. Sentido horario visto
@@ -246,6 +262,40 @@ export class Track {
 
   isOnAsphalt(x: number, y: number, index: number): boolean {
     return Math.abs(this.lateralOffset(x, y, index)) <= this.width / 2
+  }
+
+  /** +1 si el lado positivo de la normal en ese punto mira hacia afuera del circuito. */
+  outwardAt(index: number): number {
+    const p = this.pointAt(index)
+    const cxm = (this.bounds.minX + this.bounds.maxX) / 2
+    const cym = (this.bounds.minY + this.bounds.maxY) / 2
+    const nx = -Math.sin(p.heading)
+    const ny = Math.cos(p.heading)
+    return (p.x - cxm) * nx + (p.y - cym) * ny > 0 ? 1 : -1
+  }
+
+  /**
+   * Altura del terreno en un punto: superficie de pista, bermas de tierra
+   * suelta a los costados y terraplén del público del lado exterior.
+   */
+  groundHeight(x: number, y: number, hintIndex?: number): number {
+    const idx = this.nearestIndex(x, y, hintIndex)
+    const lat = this.lateralOffset(x, y, idx)
+    const d = Math.abs(lat) - this.width / 2
+    if (d <= BERM_PROFILE[0].off) return TRACK_SURFACE_Y
+    const outward = Math.sign(lat) === this.outwardAt(idx)
+    const profiles = outward ? [BERM_PROFILE, EMBANKMENT_PROFILE] : [BERM_PROFILE]
+    for (const prof of profiles) {
+      for (let i = 0; i < prof.length - 1; i++) {
+        const a = prof[i]
+        const b = prof[i + 1]
+        if (d >= a.off && d <= b.off) {
+          const t = (d - a.off) / (b.off - a.off)
+          return a.y + (b.y - a.y) * t
+        }
+      }
+    }
+    return 0
   }
 
   /** Curvatura máxima absoluta en un tramo hacia adelante. */
