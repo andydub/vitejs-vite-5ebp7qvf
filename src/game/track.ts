@@ -32,37 +32,41 @@ export const EMBANKMENT_PROFILE: { off: number; y: number }[] = [
 ]
 export const TRACK_SURFACE_Y = 0.04
 
-// Puntos de control calcados de la imagen satelital (píxeles de la captura,
+// Puntos de control calcados del plano del circuito (píxeles de la imagen,
 // origen arriba a la izquierda; ~0,47 m por píxel). El trazado se escala
 // después para que el desarrollo total sea de 1400 m. Sentido horario visto
 // desde arriba: la largada está en la recta del este, bajando hacia el sur.
 const SAT_PX_PER_M = 1 / 0.47
 const SAT_CENTER = { x: 550, y: 850 }
 const SAT_POINTS: Vec2[] = [
-  { x: 820, y: 760 }, // largada
-  { x: 885, y: 990 },
-  { x: 870, y: 1150 },
-  { x: 790, y: 1270 },
-  { x: 640, y: 1350 },
-  { x: 450, y: 1390 },
-  { x: 290, y: 1350 },
-  { x: 185, y: 1230 },
-  { x: 170, y: 1100 },
-  { x: 215, y: 1000 },
-  { x: 290, y: 910 },
-  { x: 370, y: 860 },
-  { x: 480, y: 850 },
-  { x: 590, y: 858 },
-  { x: 645, y: 830 },
-  { x: 625, y: 730 },
-  { x: 570, y: 620 },
-  { x: 510, y: 500 },
-  { x: 500, y: 400 },
-  { x: 545, y: 320 },
-  { x: 630, y: 320 },
-  { x: 690, y: 400 },
-  { x: 715, y: 500 },
-  { x: 760, y: 610 },
+  { x: 812, y: 790 }, // largada (recta del este, bajando)
+  { x: 845, y: 880 },
+  { x: 848, y: 960 },
+  { x: 815, y: 1040 },
+  { x: 745, y: 1120 },
+  { x: 655, y: 1215 },
+  { x: 555, y: 1290 },
+  { x: 450, y: 1335 },
+  { x: 350, y: 1335 },
+  { x: 275, y: 1285 },
+  { x: 245, y: 1200 },
+  { x: 262, y: 1100 },
+  { x: 300, y: 1000 },
+  { x: 345, y: 920 },
+  { x: 410, y: 880 },
+  { x: 490, y: 870 },
+  { x: 555, y: 855 },
+  { x: 588, y: 800 },
+  { x: 578, y: 720 },
+  { x: 548, y: 630 },
+  { x: 510, y: 520 },
+  { x: 480, y: 420 },
+  { x: 492, y: 345 },
+  { x: 555, y: 315 },
+  { x: 625, y: 350 },
+  { x: 680, y: 450 },
+  { x: 730, y: 580 },
+  { x: 775, y: 690 },
 ]
 const CONTROL_POINTS: Vec2[] = SAT_POINTS.map((p) => ({
   x: (p.x - SAT_CENTER.x) / SAT_PX_PER_M,

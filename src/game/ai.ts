@@ -47,6 +47,7 @@ export function aiControls(car: Car, track: Track, others: Car[], lateralBias: n
     }
   }
 
+  targetSpeed *= car.paceNow
   let throttle = 0
   let brake = 0
   if (v < targetSpeed - 0.5) throttle = 1

@@ -67,36 +67,46 @@ function canvasTexture(canvas: HTMLCanvasElement, repeat = true): THREE.CanvasTe
   return tex
 }
 
-/** Textura de la pista: tierra compactada clara con huellas y bordes sueltos. U cruza la pista, V va a lo largo. */
+/** Textura de la pista: tierra compactada clara con huellas, piedritas y manchas secas. U cruza la pista, V va a lo largo. */
 function makeTrackTexture(): THREE.CanvasTexture {
-  const w = 256
-  const h = 1024
+  const w = 512
+  const h = 2048
   const canvas = document.createElement('canvas')
   canvas.width = w
   canvas.height = h
   const ctx = canvas.getContext('2d')!
   const img = ctx.createImageData(w, h)
   const noise = makeNoise2D(7)
+  const noise2 = makeNoise2D(19)
+  const rnd = makeRng(31)
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       const u = x / w
-      const n = noise(x / 40, y / 40, 4)
-      const fine = noise(x / 6, y / 6, 2)
-      // Huellas: dos bandas oscuras donde pasan las ruedas, con ondulación.
-      const wobble = Math.sin(y / 90) * 0.04
-      const rut = Math.exp(-(((u - 0.32 - wobble) / 0.07) ** 2)) + Math.exp(-(((u - 0.68 + wobble) / 0.07) ** 2))
-      // Bordes: tierra suelta más oscura y rugosa.
-      const edge = Math.max(0, 1 - Math.min(u, 1 - u) / 0.1)
-      let k = 0.95 + (n - 0.5) * 0.3 + (fine - 0.5) * 0.14 - rut * 0.24 - edge * 0.28
-      // Estrías longitudinales finas.
-      k += 0.03 * Math.sin(x * 1.3 + Math.sin(y * 0.05) * 3)
-      const r = 198 * k
-      const g = 178 * k
-      const b = 146 * k
+      const big = noise(x / 160, y / 160, 3) // manchas grandes (zonas más secas o más húmedas)
+      const mid = noise(x / 36, y / 36, 4)
+      const fine = noise2(x / 7, y / 7, 2)
+      // Huellas: dos bandas donde pasan las ruedas, que serpentean y se desdibujan.
+      const wobble = Math.sin(y / 160) * 0.05 + Math.sin(y / 47) * 0.015
+      const rutA = Math.exp(-(((u - 0.31 - wobble) / 0.075) ** 2))
+      const rutB = Math.exp(-(((u - 0.69 + wobble) / 0.075) ** 2))
+      const rut = (rutA + rutB) * (0.75 + 0.25 * noise2(x / 50, y / 90, 2))
+      // Centro entre huellas algo más claro (tierra que se acumula) y bordes sueltos oscuros.
+      const crown = Math.exp(-(((u - 0.5) / 0.09) ** 2)) * 0.05
+      const edge = Math.max(0, 1 - Math.min(u, 1 - u) / 0.09)
+      let k = 0.96 + (big - 0.5) * 0.22 + (mid - 0.5) * 0.28 + (fine - 0.5) * 0.16 - rut * 0.2 - edge * 0.3 + crown
+      // Estrías longitudinales finas (rastro de cubiertas) y piedritas.
+      k += 0.025 * Math.sin(x * 1.7 + Math.sin(y * 0.03) * 4)
+      const stone = rnd()
+      if (stone > 0.9965) k += 0.28
+      else if (stone < 0.002) k -= 0.3
+      // Tinte: más rojizo en las zonas oscuras, más gris en las claras.
+      const r = (196 + (k - 1) * 40) * k
+      const g = (176 + (k - 1) * 20) * k
+      const b = (144 - (k - 1) * 10) * k
       const i = (y * w + x) * 4
-      img.data[i] = Math.min(255, r)
-      img.data[i + 1] = Math.min(255, g)
-      img.data[i + 2] = Math.min(255, b)
+      img.data[i] = Math.max(0, Math.min(255, r))
+      img.data[i + 1] = Math.max(0, Math.min(255, g))
+      img.data[i + 2] = Math.max(0, Math.min(255, b))
       img.data[i + 3] = 255
     }
   }
@@ -104,23 +114,32 @@ function makeTrackTexture(): THREE.CanvasTexture {
   return canvasTexture(canvas)
 }
 
-/** Textura de la tierra suelta de las bermas. */
+/** Textura de la tierra suelta de las bermas: terrones, piedras y polvo. */
 function makeLooseDirtTexture(): THREE.CanvasTexture {
-  const size = 256
+  const size = 512
   const canvas = document.createElement('canvas')
   canvas.width = size
   canvas.height = size
   const ctx = canvas.getContext('2d')!
   const img = ctx.createImageData(size, size)
   const noise = makeNoise2D(11)
+  const noise2 = makeNoise2D(23)
+  const rnd = makeRng(41)
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
-      const n = noise(x / 24, y / 24, 4)
-      const k = 0.8 + (n - 0.5) * 0.7
+      const n = noise(x / 48, y / 48, 4)
+      const clods = noise2(x / 14, y / 14, 3)
+      const fine = noise2(x / 4, y / 4, 1)
+      // Terrones: umbral sobre el ruido medio, con sombra en un lado.
+      const clod = clods > 0.58 ? 0.18 : clods > 0.52 ? 0.06 : 0
+      const shade = clods > 0.58 && noise2((x + 3) / 14, (y + 3) / 14, 3) < 0.58 ? -0.12 : 0
+      let k = 0.78 + (n - 0.5) * 0.6 + clod + shade + (fine - 0.5) * 0.22
+      const stone = rnd()
+      if (stone > 0.997) k += 0.35
       const i = (y * size + x) * 4
-      img.data[i] = Math.min(255, 132 * k)
-      img.data[i + 1] = Math.min(255, 100 * k)
-      img.data[i + 2] = Math.min(255, 70 * k)
+      img.data[i] = Math.max(0, Math.min(255, 134 * k))
+      img.data[i + 1] = Math.max(0, Math.min(255, 100 * k))
+      img.data[i + 2] = Math.max(0, Math.min(255, 70 * k))
       img.data[i + 3] = 255
     }
   }
@@ -1260,15 +1279,15 @@ export class Scene3D {
     this.scene.add(
       this.ribbon(
         [{ off: -half, y: 0.04 }, { off: half, y: 0.04 }],
-        new THREE.MeshStandardMaterial({ map: trackTex, roughness: 0.95, bumpMap: trackTex, bumpScale: 0.12 }),
-        34,
+        new THREE.MeshStandardMaterial({ map: trackTex, roughness: 0.95, bumpMap: trackTex, bumpScale: 0.2 }),
+        26,
       ),
     )
 
     // Bermas: lomo de tierra suelta a cada lado, más alto en el exterior de las curvas.
     const loose = makeLooseDirtTexture()
     loose.repeat.set(1, 1)
-    const looseMat = new THREE.MeshStandardMaterial({ map: loose, roughness: 1, side: THREE.DoubleSide, bumpMap: loose, bumpScale: 0.3 })
+    const looseMat = new THREE.MeshStandardMaterial({ map: loose, roughness: 1, side: THREE.DoubleSide, bumpMap: loose, bumpScale: 0.45 })
     for (const side of [-1, 1]) {
       this.scene.add(
         this.ribbon(
@@ -1279,7 +1298,7 @@ export class Scene3D {
             { off: side * (half + 6), y: 0.0 },
           ],
           looseMat,
-          220,
+          320,
         ),
       )
     }

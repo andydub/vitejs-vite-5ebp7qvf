@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import './App.css'
-import { Race, RIVALS, PLAYER_SPEC, type TowerRow } from './game/race'
+import { Race, RIVALS, PLAYER_SPEC, type TowerRow, type Difficulty } from './game/race'
 import { InputManager } from './game/input'
 import { EngineAudio, TrackPlayer, audioSrc } from './game/audio'
 import { drawMinimap } from './game/render'
@@ -115,6 +115,8 @@ function IntroOverlay({ t, total, onSkip }: { t: number; total: number; onSkip: 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('menu')
   const [laps, setLaps] = useState(5)
+  const [difficulty, setDifficulty] = useState<Difficulty>('facil')
+  const inMenuRef = useRef(true)
   const [results, setResults] = useState<ResultRow[]>([])
   const [hud, setHud] = useState<HudState | null>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -128,6 +130,7 @@ export default function App() {
 
   // Música del menú: arranca con la primera interacción (los navegadores bloquean el autoplay).
   useEffect(() => {
+    inMenuRef.current = screen === 'menu'
     if (screen !== 'menu') return
     if (!musicRef.current) musicRef.current = new TrackPlayer(audioSrc('menu'), true)
     const music = musicRef.current
@@ -138,7 +141,8 @@ export default function App() {
         if (ok) {
           done = true
           setMusicOn(true)
-          music.fadeTo(0.7, 1)
+          // Si el clic que arrancó la música fue "Largar", queda baja para la previa.
+          music.fadeTo(inMenuRef.current ? 0.7 : 0.18, 1)
         }
       })
     }
@@ -171,9 +175,10 @@ export default function App() {
     resize()
     window.addEventListener('resize', resize)
     const frame = (now: number) => {
-      const dt = Math.min(0.1, (now - last) / 1000)
+      // El primer timestamp del rAF puede ser anterior al arranque (la escena tarda en construirse).
+      const dt = Math.max(0, Math.min(0.1, (now - last) / 1000))
       last = now
-      scene.renderMenu(preview.cars, (now - t0) / 1000, dt)
+      scene.renderMenu(preview.cars, Math.max(0, (now - t0) / 1000), dt)
       raf = requestAnimationFrame(frame)
     }
     raf = requestAnimationFrame(frame)
@@ -185,12 +190,13 @@ export default function App() {
   }, [screen])
 
   const startRace = useCallback(() => {
-    raceRef.current = new Race(laps, '')
+    raceRef.current = new Race(laps, '', difficulty)
     setResults([])
+    inMenuRef.current = false
     setScreen('race')
     // La música baja durante la previa (relato) y se apaga al largar.
     musicRef.current?.fadeTo(0.18, 2)
-  }, [laps])
+  }, [laps, difficulty])
 
   useEffect(() => {
     if (screen !== 'race') return
@@ -239,7 +245,8 @@ export default function App() {
     window.addEventListener('resize', resize)
 
     const frame = (now: number) => {
-      const dt = Math.min(0.1, (now - last) / 1000)
+      // El primer timestamp del rAF puede ser anterior al arranque (la escena tarda en construirse).
+      const dt = Math.max(0, Math.min(0.1, (now - last) / 1000))
       last = now
       acc += dt
       const controls = input.read()
@@ -248,12 +255,12 @@ export default function App() {
         scene.cameraMode = CAMERA_MODES[(CAMERA_MODES.indexOf(scene.cameraMode) + 1) % CAMERA_MODES.length]
       }
       if (race.phase === 'intro') {
-        race.setIntroTime((now - introStart) / 1000)
+        race.setIntroTime(Math.max(0, (now - introStart) / 1000))
         acc = 0
       }
       if (race.phase === 'intro') {
         // La previa corre con el reloj real para ir en sincronía con el relato.
-        race.setIntroTime((now - introStart) / 1000)
+        race.setIntroTime(Math.max(0, (now - introStart) / 1000))
         acc = 0
       }
       while (acc >= FIXED) {
@@ -359,6 +366,16 @@ export default function App() {
           <h1>Sport 4</h1>
           <h2>Autódromo Municipal Víctor García</h2>
           <p className="muted">General Alvear, Mendoza · circuito de tierra · {TRACK_LENGTH_M} m</p>
+          <label>
+            Dificultad
+            <div className="laps">
+              {(['facil', 'normal'] as Difficulty[]).map((d) => (
+                <button key={d} className={d === difficulty ? 'active' : ''} onClick={() => setDifficulty(d)}>
+                  {d === 'facil' ? 'Fácil' : 'Normal'}
+                </button>
+              ))}
+            </div>
+          </label>
           <label>
             Vueltas
             <div className="laps">

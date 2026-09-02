@@ -4,6 +4,7 @@ import { Track } from './track'
 import { CAR_MODELS, hueOf, type CarModelConfig } from './models'
 
 export type RacePhase = 'intro' | 'countdown' | 'racing' | 'finished'
+export type Difficulty = 'facil' | 'normal'
 
 export interface DriverSpec {
   name: string
@@ -69,22 +70,38 @@ export class Race {
   private towerAt = -Infinity
 
   readonly totalLaps: number
+  readonly difficulty: Difficulty
+  private paceSeed: number[] = []
+  private mistakeUntil: number[] = []
+  private nextMistake: number[] = []
 
-  constructor(totalLaps: number, playerName: string) {
+  constructor(totalLaps: number, playerName: string, difficulty: Difficulty = 'normal') {
     this.totalLaps = totalLaps
+    this.difficulty = difficulty
     const cars: Car[] = []
     // El jugador larga último para que la carrera tenga sentido.
+    // Ritmo de cada rival: mejores más rápidos, el debutante rezagado, y en
+    // modo fácil todos un poco más lentos.
+    const easy = difficulty === 'facil' ? 0.93 : 1
     RIVALS.forEach((r, i) => {
       const car = new Car(i, r.name, r.number, r.color, r.cage, false, r.skill, this.track, i)
       car.short = r.short
       car.model = r.model ?? null
       if (r.model && r.retint) car.modelHue = hueOf(r.color) - r.model.baseHue
+      let pace = 0.945 + (r.skill - 0.8) * 0.35
+      if (r.name === 'Diego Pashkowec') pace = 0.9 // debut: el rezagado
+      car.pace = pace * easy
+      car.paceNow = car.pace
+      this.paceSeed.push(i * 1.7 + 0.3)
+      this.mistakeUntil.push(0)
+      this.nextMistake.push(20 + ((i * 37) % 50))
       cars.push(car)
     })
     const ps = PLAYER_SPEC
     this.player = new Car(RIVALS.length, playerName || ps.name, ps.number, ps.color, ps.cage, true, 1, this.track, RIVALS.length)
     this.player.short = ps.short
     this.player.model = ps.model ?? null
+    if (difficulty === 'facil') this.player.gripMul = 1.35
     cars.push(this.player)
     this.cars = cars
     this.displayOrder = [...cars]
@@ -144,6 +161,30 @@ export class Race {
   }
 
   /**
+   * Ritmo variable de los rivales: ondulación lenta, algún error ocasional y
+   * una goma elástica suave para que el pelotón no se desarme del todo.
+   */
+  private updatePace() {
+    const t = this.time
+    const leader = this.standings()[0]
+    for (const c of this.cars) {
+      if (c.isPlayer || c.finished) continue
+      const i = c.id
+      const seed = this.paceSeed[i]
+      let k = 1 + 0.018 * Math.sin(t * 0.11 + seed) + 0.01 * Math.sin(t * 0.43 + seed * 2.3)
+      if (t >= this.nextMistake[i]) {
+        this.mistakeUntil[i] = t + 1.5 + ((i * 13) % 4) * 0.4
+        this.nextMistake[i] = t + 35 + ((i * 29 + Math.floor(t)) % 40)
+      }
+      if (t < this.mistakeUntil[i]) k *= 0.75
+      const gap = leader.progress - c.progress
+      if (gap > 220) k *= 1.025
+      else if (gap < -120) k *= 0.985
+      c.paceNow = c.pace * k
+    }
+  }
+
+  /**
    * Filas de la torre de tiempos con la diferencia respecto del de adelante.
    * Se recalcula una vez por segundo para que los números no bailen.
    */
@@ -179,6 +220,7 @@ export class Race {
       return
     }
 
+    this.updatePace()
     for (const c of this.cars) {
       let controls: Controls
       if (c.finished) {

@@ -53,6 +53,9 @@ export class Car {
   model: CarModelConfig | null = null
   modelHue = 0 // rotación de matiz (grados) para reteñir el modelo compartido
   short = '' // nombre corto para la torre de tiempos
+  gripMul = 1 // asistencia de manejo (modo fácil)
+  pace = 1 // ritmo base de la IA (1 = referencia)
+  paceNow = 1 // ritmo efectivo (con variación y errores)
   height = 0 // altura del terreno bajo el auto (m)
   histP: number[] = [] // historial (progreso, tiempo) para calcular diferencias
   histT: number[] = []
@@ -93,7 +96,7 @@ export class Car {
 
   update(dt: number, c: Controls, track: Track, timeNow: number) {
     const spec = CAR_SPEC
-    const grip = this.onAsphalt ? spec.gripTrack : spec.gripGrass
+    const grip = (this.onAsphalt ? spec.gripTrack : spec.gripGrass) * this.gripMul
     const gravity = 9.81
 
     // Fuerzas longitudinales.
@@ -106,7 +109,7 @@ export class Car {
     force -= spec.dragCoef * v * v + spec.rollingN
     if (!this.onAsphalt) force -= 450 + 9 * v
     let accel = force / spec.massKg
-    if (c.brake > 0) accel -= spec.brakeDecel * c.brake * (this.onAsphalt ? 1 : 0.5)
+    if (c.brake > 0) accel -= spec.brakeDecel * c.brake * (this.onAsphalt ? 1 : 0.5) * Math.min(1.25, this.gripMul)
     this.speed += accel * dt
     if (this.speed < 0) this.speed = 0
 

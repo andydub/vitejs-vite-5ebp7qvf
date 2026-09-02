@@ -932,3 +932,19 @@
     padding-left: 24px;
   }
 }
+
+/* Placa del relator más grande, con la foto protagonista */
+.relator {
+  padding: 8px 22px 8px 8px;
+  gap: 16px;
+}
+.relator .avatar {
+  width: 96px;
+  height: 96px;
+}
+.relator b {
+  font-size: 26px;
+}
+.menu-card label + label {
+  margin-top: -8px;
+}
