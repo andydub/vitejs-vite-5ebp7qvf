@@ -480,7 +480,7 @@ export default function App() {
           {hud.phase === 'racing' && hud.lapTime < 1.5 && hud.lap === 1 && <div className="countdown go">¡Largaron!</div>}
         </>
       )}
-      <div className="touch" hidden={hud?.phase === 'intro'}>
+      <div className="touch" hidden={!hud || hud.phase === 'intro'}>
         <div className="group">
           <button {...bind('left')}>◀</button>
           <button {...bind('right')}>▶</button>
@@ -494,7 +494,7 @@ export default function App() {
           </button>
         </div>
       </div>
-      <div className="topbar" hidden={hud?.phase === 'intro'}>
+      <div className="topbar" hidden={!hud || hud.phase === 'intro'}>
         <button className="quit" onClick={() => (inputRef.current.touch.reset = true)}>
           A pista (R)
         </button>

@@ -988,6 +988,7 @@ export class Scene3D {
   private grade!: ShaderPass
   private smoke: THREE.Sprite[] = []
   private flags: THREE.Mesh[] = []
+  private mangrulloPos = new THREE.Vector3()
   private walkers: { index: number; x: number; z: number; y0: number; h: number; shirt: number; pants: number; cap: number; dx: number; dz: number; amp: number; speed: number; phase: number }[] = []
   private crowd: CrowdPeople | null = null
   private time = 0
@@ -1882,6 +1883,7 @@ export class Scene3D {
     // La cara −X local debe mirar a la pista: girar según el lado.
     mang.rotation.y = Math.atan2(-tny * outward0, tnx * outward0)
     this.scene.add(mang)
+    this.mangrulloPos.copy(mang.position)
 
     // --- Monte: arbustos bajos por todos lados, salvo pista y paddock ---
     const bushGeo = new THREE.IcosahedronGeometry(1, 1)
@@ -2069,6 +2071,28 @@ export class Scene3D {
     const pos = cenPos.clone().lerp(flyPos, kAB).lerp(dollyPos, kBC).lerp(chasePos, kCD)
     const look = cenLook.clone().lerp(flyLook, kAB).lerp(dollyLook, kBC).lerp(chaseLook, kCD)
     return { pos, look }
+  }
+
+  /** Vista fija desde una posición dada (modo foto / depuración). */
+  renderView(cars: Car[], pos: THREE.Vector3, look: THREE.Vector3) {
+    for (const c of cars) {
+      const v = this.views.get(c.id)!
+      v.group.position.set(c.x, c.height, c.y)
+      v.group.rotation.y = -c.heading
+    }
+    this.camera.position.copy(pos)
+    this.camera.lookAt(look)
+    this.camera.fov = 50
+    this.camera.updateProjectionMatrix()
+    this.sun.position.set(pos.x - 130, 48, pos.z - 90)
+    this.sun.target.position.set(pos.x, 0, pos.z)
+    this.sun.target.updateMatrixWorld()
+    this.composer.render()
+  }
+
+  /** Posición del mangrullo (para el modo foto). */
+  get mangrulloPosition(): THREE.Vector3 {
+    return this.mangrulloPos.clone()
   }
 
   /** Fondo del menú: paneo lento a baja altura por la grilla y el mangrullo. */
