@@ -60,3 +60,11 @@ La orientación de cada modelo se ajusta en `src/game/models.ts` (`yaw`).
   primera interacción, baja durante la previa y se apaga al largar.
 - `public/audio/relato.mp3`: relato de Lucio Aguirre que suena en la previa; la
   duración de la previa (`introDuration` en `race.ts`) sigue la del audio.
+
+## Imágenes reales (opcionales)
+
+Si existen, el juego las usa en lugar de las versiones dibujadas por código:
+
+- `public/img/lucio.jpg`: foto del relator, en la placa de la previa.
+- `public/img/logo-alvear.png`: isologo de la Municipalidad de General Alvear, en los paneles del mangrullo.
+- `public/img/logo-act.png`: logo de ACT, en el banner del mangrullo.

@@ -473,20 +473,15 @@ function makeACTBanner(): THREE.CanvasTexture {
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
   ctx.fillText('DESDE 1982', w / 2, h * 0.6)
-  // Escudos laterales.
-  for (const x of [110, w - 110]) {
-    for (const y of [h * 0.3, h * 0.44]) {
-      ctx.fillStyle = '#d42020'
-      ctx.beginPath()
-      ctx.arc(x, y, 40, 0, Math.PI * 2)
-      ctx.fill()
-      ctx.fillStyle = '#f4f4f4'
-      ctx.beginPath()
-      ctx.arc(x, y, 28, 0, Math.PI * 2)
-      ctx.fill()
-    }
-  }
-  return canvasTexture(c, false)
+  const tex = canvasTexture(c, false)
+  // Logo real de ACT (public/img/logo-act.png) si está disponible.
+  loadOptionalImage('logo-act.png', (img) => {
+    const lw = 560
+    const lh = (lw * img.height) / img.width
+    ctx.drawImage(img, w / 2 - lw / 2, h * 0.36 - lh / 2, lw, lh)
+    tex.needsUpdate = true
+  })
+  return tex
 }
 
 /**
@@ -603,7 +598,34 @@ function makeGABanner(): THREE.CanvasTexture {
   ctx.font = "700 26px 'Barlow', sans-serif"
   ctx.fillText('Deportes, Actividad', w / 2, h * 0.835)
   ctx.fillText('Física y Recreación', w / 2, h * 0.87)
-  return canvasTexture(c, false)
+  const tex = canvasTexture(c, false)
+  // Logo real de la Municipalidad (public/img/logo-alvear.png) si está disponible.
+  loadOptionalImage('logo-alvear.png', (img) => {
+    ctx.fillStyle = '#ffffff'
+    ctx.fillRect(30, h * 0.2, w - 60, h * 0.42)
+    const lw = w - 80
+    const lh = (lw * img.height) / img.width
+    ctx.drawImage(img, 40, h * 0.41 - lh / 2, lw, lh)
+    tex.needsUpdate = true
+  })
+  return tex
+}
+
+/** Imágenes reales opcionales (logos, fotos): embebidas en la página de un solo archivo o servidas desde /img. */
+declare global {
+  interface Window {
+    __SPORT4_IMG?: Record<string, string>
+  }
+}
+export function imageSrc(key: string): string {
+  return window.__SPORT4_IMG?.[key] ?? `${import.meta.env.BASE_URL}img/${key}`
+}
+/** Carga una imagen si existe; si falta, no hace nada (queda la versión dibujada). */
+function loadOptionalImage(key: string, onLoad: (img: HTMLImageElement) => void) {
+  const img = new Image()
+  img.onload = () => onLoad(img)
+  img.onerror = () => undefined
+  img.src = imageSrc(key)
 }
 
 /** Rejilla del radiador. */
@@ -2047,6 +2069,43 @@ export class Scene3D {
     const pos = cenPos.clone().lerp(flyPos, kAB).lerp(dollyPos, kBC).lerp(chasePos, kCD)
     const look = cenLook.clone().lerp(flyLook, kAB).lerp(dollyLook, kBC).lerp(chaseLook, kCD)
     return { pos, look }
+  }
+
+  /** Fondo del menú: paneo lento a baja altura por la grilla y el mangrullo. */
+  renderMenu(cars: Car[], t: number, dt: number) {
+    this.time += dt
+    for (const c of cars) {
+      const v = this.views.get(c.id)!
+      v.group.position.set(c.x, c.height, c.y)
+      v.group.rotation.y = -c.heading
+    }
+    for (const f of this.flags) f.rotation.y = Math.sin(this.time * 2 + (f.userData.phase as number)) * 0.25
+    this.updateWalkers()
+    for (const sp of this.smoke) {
+      const a = (this.time * 0.18 + (sp.userData.phase as number)) % 1
+      const base = sp.userData.base as THREE.Vector3
+      sp.position.set(base.x + (sp.userData.drift as number) * a * 6, base.y + a * 7, base.z + a * 2)
+      sp.scale.setScalar(0.6 + a * 3.5)
+      ;(sp.material as THREE.SpriteMaterial).opacity = 0.4 * (1 - a) * Math.min(1, a * 6)
+    }
+    const n = this.track.points.length
+    // Órbita lenta alrededor del centro de la grilla, alternando altura.
+    const grid = this.track.pointAtF(n - 42)
+    const ang = 0.9 + t * 0.04
+    const r = 24
+    const pos = new THREE.Vector3(grid.x + Math.cos(ang) * r, 3.4 + Math.sin(t * 0.2) * 1.0, grid.y + Math.sin(ang) * r)
+    const look = new THREE.Vector3(grid.x, 0.8, grid.y)
+    this.camera.position.copy(pos)
+    this.camera.lookAt(look)
+    this.camera.fov = 48
+    this.camera.updateProjectionMatrix()
+    this.camPos.copy(pos)
+    this.camTarget.copy(look)
+    this.sun.position.set(grid.x - 130, 48, grid.y - 90)
+    this.sun.target.position.set(grid.x, 0, grid.y)
+    this.sun.target.updateMatrixWorld()
+    this.grade.uniforms.time.value = this.time % 100
+    this.composer.render()
   }
 
   /** Cámara de la previa, llamada por el bucle principal mientras dura. */

@@ -4,7 +4,7 @@ import { Race, RIVALS, PLAYER_SPEC, type TowerRow } from './game/race'
 import { InputManager } from './game/input'
 import { EngineAudio, TrackPlayer, audioSrc } from './game/audio'
 import { drawMinimap } from './game/render'
-import { Scene3D, type CameraMode } from './game/scene3d'
+import { Scene3D, imageSrc, type CameraMode } from './game/scene3d'
 import { TRACK_LENGTH_M } from './game/track'
 
 const CAMERA_MODES: CameraMode[] = ['chase', 'far', 'hood']
@@ -46,13 +46,15 @@ type Screen = 'menu' | 'race' | 'results'
 /** Grilla completa en orden de cajón, para las tarjetas de la previa. */
 const GRID = [...RIVALS, PLAYER_SPEC]
 
-/** Foto del relator: embebida en la página de un solo archivo o servida desde /img. */
-declare global {
-  interface Window {
-    __SPORT4_IMG?: Record<string, string>
-  }
+/** Foto del relator: si el archivo no existe, se muestran las iniciales. */
+function RelatorAvatar() {
+  const [ok, setOk] = useState(true)
+  return (
+    <div className="avatar">
+      {ok ? <img src={imageSrc('lucio.jpg')} alt="Lucio Aguirre" onError={() => setOk(false)} /> : 'LA'}
+    </div>
+  )
 }
-const lucioSrc: string | null = window.__SPORT4_IMG?.lucio ?? null
 
 /**
  * Sobreimpresos de la previa: título del circuito, tarjetas de pilotos con
@@ -97,9 +99,7 @@ function IntroOverlay({ t, total, onSkip }: { t: number; total: number; onSkip: 
         </div>
       )}
       <div className="relator">
-        <div className="avatar" style={lucioSrc ? { backgroundImage: `url(${lucioSrc})` } : undefined}>
-          {lucioSrc ? '' : 'LA'}
-        </div>
+        <RelatorAvatar />
         <div>
           <p className="tag red small">Relata</p>
           <b>Lucio Aguirre</b>
@@ -118,6 +118,7 @@ export default function App() {
   const [results, setResults] = useState<ResultRow[]>([])
   const [hud, setHud] = useState<HudState | null>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const menuCanvasRef = useRef<HTMLCanvasElement>(null)
   const minimapRef = useRef<HTMLCanvasElement>(null)
   const raceRef = useRef<Race | null>(null)
   const inputRef = useRef(new InputManager())
@@ -148,6 +149,38 @@ export default function App() {
     return () => {
       window.removeEventListener('pointerdown', tryPlay)
       window.removeEventListener('keydown', tryPlay)
+    }
+  }, [screen])
+
+  // Fondo del menú: la escena en vivo con un paneo lento por la grilla.
+  useEffect(() => {
+    if (screen !== 'menu') return
+    const canvas = menuCanvasRef.current
+    if (!canvas) return
+    const preview = new Race(1, '')
+    const scene = new Scene3D(canvas, preview.track, preview.cars)
+    let raf = 0
+    let last = performance.now()
+    const t0 = last
+    const resize = () => {
+      const dpr = Math.min(window.devicePixelRatio || 1, 1.5)
+      scene.resize(window.innerWidth, window.innerHeight, dpr)
+      canvas.style.width = `${window.innerWidth}px`
+      canvas.style.height = `${window.innerHeight}px`
+    }
+    resize()
+    window.addEventListener('resize', resize)
+    const frame = (now: number) => {
+      const dt = Math.min(0.1, (now - last) / 1000)
+      last = now
+      scene.renderMenu(preview.cars, (now - t0) / 1000, dt)
+      raf = requestAnimationFrame(frame)
+    }
+    raf = requestAnimationFrame(frame)
+    return () => {
+      cancelAnimationFrame(raf)
+      window.removeEventListener('resize', resize)
+      scene.dispose()
     }
   }, [screen])
 
@@ -320,6 +353,7 @@ export default function App() {
   if (screen === 'menu') {
     return (
       <div className="menu">
+        <canvas ref={menuCanvasRef} className="menu-bg" />
         <div className="menu-card">
           <p className="tag red">Categorías Tradicionales · Mendoza</p>
           <h1>Sport 4</h1>

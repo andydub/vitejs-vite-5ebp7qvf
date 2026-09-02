@@ -863,7 +863,8 @@
   font-family: var(--tv-font);
   font-weight: 900;
   text-transform: uppercase;
-  font-size: 84px;
+  white-space: nowrap;
+  font-size: clamp(56px, 7vw, 84px);
   letter-spacing: 0.02em;
   margin-top: 10px;
 }
@@ -890,4 +891,44 @@
   font-size: 26px;
   padding: 14px 56px;
   transform: skewX(-10deg);
+}
+
+/* Menú con la pista en vivo de fondo */
+.menu {
+  position: relative;
+  overflow: hidden;
+  justify-content: flex-start;
+  padding-left: 6vw;
+}
+.menu-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+.menu-card {
+  position: relative;
+  z-index: 1;
+  text-align: left;
+  max-width: 480px;
+  background: rgba(11, 13, 18, 0.72);
+  backdrop-filter: blur(6px);
+}
+.menu-card .laps,
+.menu-card .row {
+  justify-content: flex-start;
+}
+.menu-card label {
+  text-align: left;
+}
+.relator .avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center top;
+}
+@media (max-width: 700px) {
+  .menu {
+    justify-content: center;
+    padding-left: 24px;
+  }
 }
