@@ -211,12 +211,10 @@ function makeGroundTexture(track: Track, size: number, center: THREE.Vector2, gr
   ctx.lineWidth = 16 / mPerPx
   ctx.lineJoin = 'round'
   ctx.beginPath()
-  const cxm = center.x
-  const cym = center.y
   track.points.forEach((p, i) => {
     const nx = -Math.sin(p.heading)
     const ny = Math.cos(p.heading)
-    const outward = (p.x - cxm) * nx + (p.y - cym) * ny > 0 ? 1 : -1
+    const outward = track.outwardAt(i)
     const off = half + 22
     const [px, py] = toPx(p.x + nx * off * outward, p.y + ny * off * outward)
     if (i === 0) ctx.moveTo(px, py)
@@ -1031,7 +1029,7 @@ export class Scene3D {
     const s0 = track.points[0]
     const nx = -Math.sin(s0.heading)
     const ny = Math.cos(s0.heading)
-    const outward = (s0.x - this.center.x) * nx + (s0.y - this.center.y) * ny > 0 ? 1 : -1
+    const outward = track.outwardAt(0)
     const off = track.width / 2 + 75
     this.paddock = {
       cx: s0.x + Math.cos(s0.heading) * 60 + nx * off * outward,
@@ -1369,11 +1367,8 @@ export class Scene3D {
     const rnd = makeRng(2024)
     const cxm = this.center.x
     const cym = this.center.y
-    const outwardAt = (p: { x: number; y: number; heading: number }) => {
-      const nx = -Math.sin(p.heading)
-      const ny = Math.cos(p.heading)
-      return (p.x - cxm) * nx + (p.y - cym) * ny > 0 ? 1 : -1
-    }
+    // Lado exterior del circuito (alambrado, terraplén y público van afuera).
+    const outwardAt = (_p: { x: number; y: number; heading: number }) => t.outwardAt(0)
 
     // --- Terraplén perimetral donde se instala el público ---
     const embankMat = new THREE.MeshStandardMaterial({ map: makeLooseDirtTexture(), roughness: 1, side: THREE.DoubleSide })

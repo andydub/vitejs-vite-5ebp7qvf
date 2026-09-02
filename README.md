@@ -60,6 +60,8 @@ La orientación de cada modelo se ajusta en `src/game/models.ts` (`yaw`).
   primera interacción, baja durante la previa y se apaga al largar.
 - `public/audio/relato.mp3`: relato de Lucio Aguirre que suena en la previa; la
   duración de la previa (`introDuration` en `race.ts`) sigue la del audio.
+- `public/audio/largada.mp3`: continuación del relato en la largada; arranca con
+  la cuenta regresiva ("tres" a los 0,25 s, "¡largaron!" a los 2,75 s).
 
 ## Imágenes reales (opcionales)
 

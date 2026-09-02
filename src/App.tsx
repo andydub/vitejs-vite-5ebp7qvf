@@ -23,7 +23,7 @@ interface HudState {
   total: number
   lapTime: number
   bestLap: number
-  countdown: number
+  countdown: string
   phase: string
   offTrack: boolean
   tower: TowerRow[]
@@ -212,7 +212,10 @@ export default function App() {
     audio.start()
     const relato = new TrackPlayer(audioSrc('relato'), false)
     void relato.play(1)
+    // Audio de la largada: continúa el relato y canta la cuenta "tres, dos, uno, ¡largaron!".
+    const largada = new TrackPlayer(audioSrc('largada'), false)
     let musicMuted = false
+    let largadaStarted = false
     const skipIntro = () => {
       race.skipIntro()
       relato.fadeTo(0, 0.8, true)
@@ -276,7 +279,12 @@ export default function App() {
         if (!musicMuted) {
           musicMuted = true
           musicRef.current?.fadeTo(0, 1.5, true)
-          relato.fadeTo(0, 1, true)
+          relato.fadeTo(0, 0.6, true)
+        }
+        if (!largadaStarted) {
+          // Arranca junto con la cuenta regresiva: el "tres" se escucha a los 0,25 s.
+          largadaStarted = true
+          void largada.play(1)
         }
         scene.update(race.cars, p, dt)
       }
@@ -298,7 +306,7 @@ export default function App() {
           total: race.cars.length,
           lapTime: race.phase === 'countdown' ? 0 : race.time - p.lapStartTime,
           bestLap: p.bestLap,
-          countdown: race.countdown,
+          countdown: race.countdownLabel(),
           phase: race.phase,
           offTrack: !p.onAsphalt,
           tower: race.tower(),
@@ -335,6 +343,7 @@ export default function App() {
       input.detach()
       audio.stop()
       relato.dispose()
+      largada.dispose()
       scene.dispose()
     }
   }, [screen])
@@ -492,7 +501,7 @@ export default function App() {
             {hud.offTrack && <div className="warn">¡Afuera!</div>}
           </div>
           {hud.phase === 'countdown' && (
-            <div className="countdown">{hud.countdown > 3 ? '' : Math.ceil(hud.countdown) || '¡Largaron!'}</div>
+            <div className="countdown">{hud.countdown}</div>
           )}
           {hud.phase === 'racing' && hud.lapTime < 1.5 && hud.lap === 1 && <div className="countdown go">¡Largaron!</div>}
         </>

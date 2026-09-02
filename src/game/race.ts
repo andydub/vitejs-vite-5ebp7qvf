@@ -4,6 +4,13 @@ import { Track } from './track'
 import { CAR_MODELS, hueOf, type CarModelConfig } from './models'
 
 export type RacePhase = 'intro' | 'countdown' | 'racing' | 'finished'
+
+/**
+ * Momentos (en segundos desde que arranca el audio de largada) en que Lucio
+ * canta "tres", "dos", "uno" y "¡largaron!". La cuenta en pantalla y la
+ * largada de los autos siguen estos tiempos.
+ */
+export const COUNTDOWN_CUES = { three: 0.25, two: 1.2, one: 2.05, go: 2.75 }
 export type Difficulty = 'facil' | 'normal'
 
 export interface DriverSpec {
@@ -60,7 +67,7 @@ export class Race {
   readonly player: Car
   phase: RacePhase = 'intro'
   time = 0 // segundos desde el inicio de la simulación
-  countdown = 3.5
+  countdown = COUNTDOWN_CUES.go
   introDuration = 59 // segundos de previa (dura lo que el relato)
   private aiBias: number[]
   private results: Car[] = []
@@ -135,7 +142,7 @@ export class Race {
   skipIntro() {
     if (this.phase === 'intro') {
       this.phase = 'countdown'
-      this.countdown = 3.5
+      this.countdown = COUNTDOWN_CUES.go
     }
   }
 
@@ -182,6 +189,16 @@ export class Race {
       else if (gap < -120) k *= 0.985
       c.paceNow = c.pace * k
     }
+  }
+
+  /** Número de la cuenta regresiva que corresponde mostrar ('' antes del "tres"). */
+  countdownLabel(): string {
+    if (this.phase !== 'countdown') return ''
+    const elapsed = COUNTDOWN_CUES.go - this.countdown
+    if (elapsed < COUNTDOWN_CUES.three) return ''
+    if (elapsed < COUNTDOWN_CUES.two) return '3'
+    if (elapsed < COUNTDOWN_CUES.one) return '2'
+    return '1'
   }
 
   /**

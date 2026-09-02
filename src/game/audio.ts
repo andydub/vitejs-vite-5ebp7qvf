@@ -69,7 +69,7 @@ declare global {
   }
 }
 
-export function audioSrc(key: 'menu' | 'relato'): string {
+export function audioSrc(key: 'menu' | 'relato' | 'largada'): string {
   const embedded = window.__SPORT4_AUDIO?.[key]
   if (embedded) return embedded
   return `${import.meta.env.BASE_URL}audio/${key}.mp3`

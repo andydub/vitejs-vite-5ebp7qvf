@@ -180,6 +180,15 @@ export class Track {
     }
     const pad = 60
     this.bounds = { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad }
+    // Área con signo del lazo: si es positiva el interior queda del lado
+    // positivo de la normal (giro antihorario en estas coordenadas).
+    let area = 0
+    for (let i = 0; i < this.points.length; i++) {
+      const a = this.points[i]
+      const b = this.points[(i + 1) % this.points.length]
+      area += a.x * b.y - b.x * a.y
+    }
+    this.outwardSign = area > 0 ? -1 : 1
 
     for (let i = 0; i < n; i++) {
       const key = this.cellKey(this.points[i].x, this.points[i].y)
@@ -277,14 +286,15 @@ export class Track {
     return Math.abs(this.lateralOffset(x, y, index)) <= this.width / 2
   }
 
-  /** +1 si el lado positivo de la normal en ese punto mira hacia afuera del circuito. */
-  outwardAt(index: number): number {
-    const p = this.pointAt(index)
-    const cxm = (this.bounds.minX + this.bounds.maxX) / 2
-    const cym = (this.bounds.minY + this.bounds.maxY) / 2
-    const nx = -Math.sin(p.heading)
-    const ny = Math.cos(p.heading)
-    return (p.x - cxm) * nx + (p.y - cym) * ny > 0 ? 1 : -1
+  /**
+   * +1 si el lado positivo de la normal (-sin h, cos h) mira hacia afuera del
+   * circuito. Sale de la orientación del lazo (área con signo), así vale para
+   * todos los tramos, incluso los que quedan cerca del centro del plano.
+   */
+  private readonly outwardSign: number
+
+  outwardAt(_index?: number): number {
+    return this.outwardSign
   }
 
   /**
