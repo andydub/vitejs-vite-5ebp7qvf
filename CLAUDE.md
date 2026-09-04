@@ -52,6 +52,14 @@ git add -A && git commit && git push -u origin claude/racing-game-alvear-nzrosq
   compactada se deshaga en lenguas y terrones; `BERM_PROFILE` (track.ts) es
   la única fuente del perfil de la berma. Piedras, pastos secos y carteles de
   100/50 m en `buildTrackDressing`.
+- Audio del motor: loops reales del onboard del usuario (Tiago Carreras,
+  Sport 4) en `public/audio/engine/`, generados con
+  `scripts/engine_loops.py onboard.mp3` (el mp3 no está en el repo; pedirlo
+  si hay que regenerar). Caja de 5 marchas, limitador, petardeo, tierra,
+  derrape, viento y rivales con Doppler en `src/game/audio.ts`. El bundle
+  embebe los WAV con clave `engine/<archivo>` en `__SPORT4_AUDIO`.
+  Para probar sin escuchar: `window.__sport4.audio` expone `rpm`, `gear`,
+  `ready` y `level` (RMS de salida).
 - Público en `src/game/crowd.ts` (figuras con cápsulas, piel/pelo/gorra,
   posturas). La huida ante un auto que se sale está en `updateCrowd`
   (scene3d.ts): huyen hacia los costados de la trayectoria, esperan y
@@ -72,6 +80,8 @@ git add -A && git commit && git push -u origin claude/racing-game-alvear-nzrosq
   teletransportar al jugador (`race.player.x/y/heading/speed`), cambiar
   `scene.cameraMode` y leer `scene.fleeingCount`. El cartel "¡Largaron!"
   tapa la pantalla hasta ~5 s después de `race.player.lapStartTime`.
+- El ffmpeg de Playwright no decodifica mp3: usar `soundfile` (pip) para
+  análisis de audio. YouTube está bloqueado por la red: pedir el archivo.
 - Las imágenes pegadas en el chat no llegan como archivo: pedir que las suba
   como adjunto o al repo (`public/`).
 

@@ -1,0 +1,23 @@
+/** Generado por scripts/engine_loops.py: loops del motor real por frecuencia de encendido (Hz). */
+export const ENGINE_LOOPS: { file: string; hz: number; throttle: 'on' | 'off' }[] = [
+  { file: 'eng_58_on.wav', hz: 58.0, throttle: 'on' },
+  { file: 'eng_60_off.wav', hz: 60.1, throttle: 'off' },
+  { file: 'eng_83_on.wav', hz: 83.4, throttle: 'on' },
+  { file: 'eng_102_on.wav', hz: 101.8, throttle: 'on' },
+  { file: 'eng_102_off.wav', hz: 102.1, throttle: 'off' },
+  { file: 'eng_123_on.wav', hz: 123.1, throttle: 'on' },
+  { file: 'eng_119_off.wav', hz: 118.5, throttle: 'off' },
+  { file: 'eng_136_on.wav', hz: 135.6, throttle: 'on' },
+  { file: 'eng_134_off.wav', hz: 133.9, throttle: 'off' },
+  { file: 'eng_157_on.wav', hz: 157.2, throttle: 'on' },
+  { file: 'eng_168_off.wav', hz: 168.3, throttle: 'off' },
+  { file: 'eng_175_on.wav', hz: 175.2, throttle: 'on' },
+  { file: 'eng_207_on.wav', hz: 207.4, throttle: 'on' },
+  { file: 'eng_199_off.wav', hz: 198.7, throttle: 'off' },
+  { file: 'eng_224_on.wav', hz: 223.8, throttle: 'on' },
+  { file: 'eng_237_off.wav', hz: 237.4, throttle: 'off' },
+  { file: 'eng_260_on.wav', hz: 260.3, throttle: 'on' },
+  { file: 'eng_259_off.wav', hz: 258.7, throttle: 'off' },
+  { file: 'eng_276_on.wav', hz: 276.1, throttle: 'on' },
+  { file: 'eng_272_off.wav', hz: 272.5, throttle: 'off' },
+]

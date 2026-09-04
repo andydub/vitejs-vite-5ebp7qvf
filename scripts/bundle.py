@@ -18,6 +18,9 @@ for name, mime in [('lucio.jpg', 'image/jpeg'), ('logo-alvear.png', 'image/png')
     if os.path.exists(f):
         imgs.append(f'"{name}":"data:{mime};base64,{b(f)}"')
 audio = ','.join(f'{k}:"data:audio/mpeg;base64,{b("public/audio/" + k + ".mp3")}"' for k in ['menu', 'relato', 'largada'])
+# Loops del motor real (WAV cortos), con la misma clave que usa audioSrc().
+engine = sorted(glob.glob('public/audio/engine/*.wav'))
+audio += ''.join(f',"engine/{os.path.basename(f)}":"data:audio/wav;base64,{b(f)}"' for f in engine)
 models = ','.join(f'{k}:"{b("public/models/" + k + ".glb")}"' for k in ['car29', 'car1'])
 
 html = f'''<title>Sport 4 Alvear</title>

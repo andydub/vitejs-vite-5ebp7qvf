@@ -207,12 +207,14 @@ export default function App() {
     const scene = new Scene3D(canvas, race.track, race.cars)
     // Gancho para pruebas automatizadas (capturas con Playwright): permite
     // teletransportar autos y cambiar la cámara desde la consola.
-    ;(window as unknown as { __sport4?: unknown }).__sport4 = { race, scene }
     const mmCtx = minimap.getContext('2d')!
     const input = inputRef.current
     input.attach()
     const audio = new EngineAudio()
     audio.start()
+    // Gancho para pruebas automatizadas (capturas con Playwright): permite
+    // teletransportar autos, cambiar la cámara y leer el estado del audio.
+    ;(window as unknown as { __sport4?: unknown }).__sport4 = { race, scene, audio }
     const relato = new TrackPlayer(audioSrc('relato'), false)
     void relato.play(1)
     // Audio de la largada: continúa el relato y canta la cuenta "tres, dos, uno, ¡largaron!".
@@ -291,7 +293,7 @@ export default function App() {
         }
         scene.update(race.cars, p, dt)
       }
-      audio.update(p.speed, race.phase === 'racing' ? controls.throttle : 0, dt)
+      audio.update(race.cars, p, controls, race.phase, dt)
 
       const dpr = Math.min(window.devicePixelRatio || 1, 2)
       mmCtx.setTransform(dpr, 0, 0, dpr, 0, 0)

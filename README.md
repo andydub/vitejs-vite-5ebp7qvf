@@ -45,7 +45,12 @@ Abrir la URL que muestra Vite (por defecto http://localhost:5173).
   brazos con antebrazo, cabeza con cara, pelo o gorra) con posturas variadas;
   caminan por el terraplén y salen corriendo si un auto se va contra ellos
   (`updateCrowd` en `scene3d.ts`).
-- `src/game/audio.ts`: motor sintetizado con Web Audio.
+- `src/game/audio.ts`: audio con Web Audio. El motor del jugador mezcla
+  loops del motor real (`public/audio/engine/`, cortados de un onboard con
+  `scripts/engine_loops.py`) según las rpm de una caja de 5 marchas simulada,
+  con limitador, corte al cambiar, petardeo al levantar y saturación de
+  escape; encima van tierra y piedras, derrape, viento y los tres rivales
+  más cercanos con estéreo y Doppler.
 - `src/App.tsx`: menú, HUD, minimapa y resultados.
 
 ## Pruebas automatizadas
@@ -67,6 +72,10 @@ La orientación de cada modelo se ajusta en `src/game/models.ts` (`yaw`).
 
 ## Audio
 
+- `public/audio/engine/eng_<Hz>_<on|off>.wav`: loops del motor real por
+  frecuencia de encendido (rpm = Hz × 30), "a fondo" y "levantado". Se generan
+  con `python3 scripts/engine_loops.py onboard.mp3` (numpy, scipy, soundfile),
+  que también escribe `src/game/engineLoops.ts`. El onboard no está en el repo.
 - `public/audio/menu.mp3`: música del menú ("Velocidad Pura"). Arranca con la
   primera interacción, baja durante la previa y se apaga al largar.
 - `public/audio/relato.mp3`: relato de Lucio Aguirre que suena en la previa; la
