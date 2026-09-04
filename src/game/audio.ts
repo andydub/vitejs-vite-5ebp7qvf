@@ -596,6 +596,10 @@ export class TrackPlayer {
     return !this.el.paused
   }
 
+  get volume() {
+    return this.el.volume
+  }
+
   fadeTo(volume: number, seconds: number, thenPause = false) {
     if (this.fadeTimer !== null) window.clearInterval(this.fadeTimer)
     const start = this.el.volume

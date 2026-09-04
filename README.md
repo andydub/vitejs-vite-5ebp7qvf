@@ -27,6 +27,12 @@ Abrir la URL que muestra Vite (por defecto http://localhost:5173).
 | Doblar            | ← → o A D               | botones ◀ ▶         |
 | Volver a la pista | R                       | botón "A pista"     |
 
+Al cruzar la meta hay una secuencia de llegada de 14 s (`FINISH_SECONDS`):
+cámara lenta, cámara de TV al costado de la línea, placa "¡Bandera a
+cuadros!" con el puesto, giro de honor con la cámara orbitando y el público
+festejando; un toque o tecla la salta. El banderillero (`Flagman` en
+`crowd.ts`) agita la bandera mientras van llegando los autos.
+
 Si el auto se aleja más de 8,5 m del borde durante 2,5 s (cortando camino o
 clavado contra el terraplén), vuelve solo a la pista, con aviso y cuenta en
 el HUD (`updateFarOff` en `src/game/race.ts`).
@@ -81,8 +87,14 @@ La orientación de cada modelo se ajusta en `src/game/models.ts` (`yaw`).
   frecuencia de encendido (rpm = Hz × 30), "a fondo" y "levantado". Se generan
   con `python3 scripts/engine_loops.py onboard.mp3` (numpy, scipy, soundfile),
   que también escribe `src/game/engineLoops.ts`. El onboard no está en el repo.
-- `public/audio/menu.mp3`: música del menú ("Velocidad Pura"). Arranca con la
-  primera interacción, baja durante la previa y se apaga al largar.
+- `public/audio/menu.mp3`: música del menú. Arranca con la primera interacción
+  y se apaga al tocar Largar.
+- `public/audio/velocidad.mp3`: "Velocidad Pura". Suena bajita durante la
+  previa (debajo del relato), se corta al largar y vuelve a pleno al cruzar
+  la meta y en la pantalla de resultados.
+- Todas las pistas están reconvertidas a 32 kHz y bitrate bajo (música 72-76
+  kbps estéreo, voces 34-37 kbps mono) para que el HTML único entre en el
+  límite de 16 MB del Artifact.
 - `public/audio/relato.mp3`: relato de Lucio Aguirre que suena en la previa; la
   duración de la previa (`introDuration` en `race.ts`) sigue la del audio.
 - `public/audio/largada.mp3`: continuación del relato en la largada; arranca con

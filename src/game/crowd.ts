@@ -524,3 +524,126 @@ export class CrowdPeople {
     }
   }
 }
+
+// ---------------------------------------------------------------------------
+// Banderillero: una figura sola (mallas comunes, no instanciadas) con la
+// bandera a cuadros en la mano derecha. Quieto la tiene enrollada y baja;
+// cuando llegan los autos la agita en alto y la tela flamea.
+// ---------------------------------------------------------------------------
+
+function makeCheckerTexture(): THREE.CanvasTexture {
+  return tex(160, 96, (ctx) => {
+    for (let y = 0; y < 6; y++) {
+      for (let x = 0; x < 10; x++) {
+        ctx.fillStyle = (x + y) % 2 ? '#111111' : '#f4f4f4'
+        ctx.fillRect(x * 16, y * 16, 16, 16)
+      }
+    }
+  })
+}
+
+export class Flagman {
+  readonly group = new THREE.Group()
+  private rightArm = new THREE.Group()
+  private cloth: THREE.Mesh
+  private clothPos: THREE.BufferAttribute
+  private clothBase: Float32Array
+  private waveAmount = 0
+  private phase = Math.random() * 6
+
+  constructor() {
+    const skin = new THREE.MeshStandardMaterial({ color: 0xd9a072, roughness: 0.8, map: makeFaceTexture(2) })
+    const shirt = new THREE.MeshStandardMaterial({ color: 0xf2f2f2, roughness: 0.9, map: makeShirtTexture(0) })
+    const sleeve = new THREE.MeshStandardMaterial({ color: 0xf2f2f2, roughness: 0.9 })
+    const pants = new THREE.MeshStandardMaterial({ color: 0x1f1f1f, roughness: 0.9, vertexColors: true, map: makePantsTexture() })
+    const capMat = new THREE.MeshStandardMaterial({ color: 0xd42020, roughness: 0.9 })
+    const legGeo = legGeometry()
+    for (const side of [-1, 1]) {
+      const leg = new THREE.Mesh(legGeo, pants)
+      leg.position.set(0, 0, side * 0.095)
+      leg.castShadow = true
+      this.group.add(leg)
+    }
+    const torso = new THREE.Mesh(torsoGeometry(), shirt)
+    torso.position.y = 0.76
+    torso.castShadow = true
+    this.group.add(torso)
+    const head = new THREE.Mesh(headGeometry(), skin)
+    head.position.y = 1.57
+    head.castShadow = true
+    this.group.add(head)
+    const cap = new THREE.Mesh(capGeometry(), capMat)
+    cap.position.y = 1.57
+    this.group.add(cap)
+    // Brazos: el izquierdo cuelga; el derecho es un grupo que se anima desde el hombro.
+    const upperGeo = new THREE.CapsuleGeometry(0.056, 0.2, 3, 8)
+    upperGeo.translate(0, -0.13, 0)
+    const foreGeo = new THREE.CapsuleGeometry(0.046, 0.2, 3, 8)
+    foreGeo.translate(0, -0.12, 0)
+    const left = new THREE.Group()
+    left.position.set(0, 1.34, -0.215)
+    left.rotation.z = 0.1
+    const lu = new THREE.Mesh(upperGeo, sleeve)
+    const lf = new THREE.Mesh(foreGeo, skin)
+    lf.position.y = -0.26
+    lf.rotation.z = 0.3
+    left.add(lu, lf)
+    this.group.add(left)
+    this.rightArm.position.set(0, 1.34, 0.215)
+    const ru = new THREE.Mesh(upperGeo, sleeve)
+    const fore = new THREE.Group()
+    fore.position.y = -0.26
+    fore.rotation.z = 0.35
+    const rf = new THREE.Mesh(foreGeo, skin)
+    fore.add(rf)
+    // Mástil agarrado cerca de su base: sigue la línea del antebrazo más allá
+    // de la mano (el antebrazo apunta a -y local), con la tela en la punta.
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.8, 6), new THREE.MeshStandardMaterial({ color: 0xdddddd, metalness: 0.5, roughness: 0.4 }))
+    pole.position.set(0, -0.28 - 0.25, 0)
+    fore.add(pole)
+    const clothGeo = new THREE.PlaneGeometry(0.85, 0.55, 12, 6)
+    clothGeo.translate(0.425, 0, 0)
+    this.cloth = new THREE.Mesh(clothGeo, new THREE.MeshStandardMaterial({ map: makeCheckerTexture(), side: THREE.DoubleSide, roughness: 0.9 }))
+    this.cloth.position.set(0, -0.28 - 0.38, 0)
+    // La tela sale del mástil hacia el costado de la persona.
+    this.cloth.rotation.y = Math.PI / 2
+    this.cloth.castShadow = true
+    fore.add(this.cloth)
+    this.clothPos = this.cloth.geometry.getAttribute('position') as THREE.BufferAttribute
+    this.clothBase = new Float32Array(this.clothPos.array as Float32Array)
+    this.rightArm.add(ru, fore)
+    this.group.add(this.rightArm)
+    this.rightArm.rotation.z = 0.15
+    for (const m of [ru, rf, lu, lf]) m.castShadow = true
+    this.setWave(0)
+  }
+
+  /** 0 = bandera enrollada y baja; 1 = agitándola en alto. */
+  private setWave(k: number) {
+    this.waveAmount = k
+    this.cloth.scale.set(1, 0.12 + 0.88 * k, 1)
+  }
+
+  update(time: number, dt: number, waving: boolean) {
+    const target = waving ? 1 : 0
+    this.setWave(this.waveAmount + (target - this.waveAmount) * Math.min(1, dt * 3))
+    const k = this.waveAmount
+    // Brazo: de colgando (0,15 rad) a en alto (2,4 rad) con vaivén adelante-atrás y lateral.
+    const swing = Math.sin(time * 7 + this.phase)
+    this.rightArm.rotation.z = 0.15 + k * (2.25 + swing * 0.35)
+    this.rightArm.rotation.x = k * Math.cos(time * 7 + this.phase) * 0.55
+    // Tela: ondas que crecen hacia la punta, más fuertes agitando.
+    const pos = this.clothPos
+    const base = this.clothBase
+    const amp = 0.02 + 0.07 * k
+    const speed = 6 + 10 * k
+    for (let i = 0; i < pos.count; i++) {
+      const x = base[i * 3]
+      const y = base[i * 3 + 1]
+      const ripple = Math.sin(x * 9 - time * speed + y * 3) * amp * (x / 0.85) + Math.sin(x * 4 + time * 3.1) * amp * 0.4 * (x / 0.85)
+      pos.setZ(i, ripple)
+    }
+    pos.needsUpdate = true
+    this.cloth.geometry.computeVertexNormals()
+  }
+}

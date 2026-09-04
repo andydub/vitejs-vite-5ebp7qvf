@@ -9,7 +9,7 @@ import { Lensflare, LensflareElement } from 'three/addons/objects/Lensflare.js'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { CAR_SPEC, type Car } from './car'
 import { BERM_PROFILE, Track } from './track'
-import { CrowdPeople, HAIR_COLORS, SKIN_TONES, type Person, type Pose } from './crowd'
+import { CrowdPeople, Flagman, HAIR_COLORS, SKIN_TONES, type Person, type Pose } from './crowd'
 import { applyHueShift, loadCarModel, WHEEL_NAMES } from './models'
 import { buildWheel } from './wheel'
 
@@ -1048,6 +1048,11 @@ export class Scene3D {
   private mangrulloPos = new THREE.Vector3()
   private people: Person[] = []
   private crowd: CrowdPeople | null = null
+  private flagman: Flagman | null = null
+  /** Banderillero agitando la bandera a cuadros (llegada). */
+  finishFlag = false
+  /** El público cerca del jugador festeja (final de carrera). */
+  celebrate = false
   private fleeing = 0 // cuántos espectadores están corriendo (para la lógica y el sonido)
   private time = 0
   cameraMode: CameraMode = 'chase'
@@ -1367,6 +1372,14 @@ export class Scene3D {
     this.scene.add(line)
     const nx = -Math.sin(s0.heading)
     const ny = Math.cos(s0.heading)
+    // Banderillero en la línea de llegada, del lado exterior, mirando a los autos que vienen.
+    const fo = t.outwardAt()
+    const flagman = new Flagman()
+    const fd = 1.4
+    flagman.group.position.set(s0.x + nx * (half + fd) * fo - Math.cos(s0.heading) * 1.5, this.bermHeight(fd), s0.y + ny * (half + fd) * fo - Math.sin(s0.heading) * 1.5)
+    flagman.group.rotation.y = -(s0.heading + Math.PI) + fo * 0.5
+    this.scene.add(flagman.group)
+    this.flagman = flagman
     const postGeo = new THREE.CylinderGeometry(0.12, 0.12, 6, 8)
     const postMat = new THREE.MeshStandardMaterial({ color: 0xdddddd, metalness: 0.4 })
     for (const side of [-1, 1]) {
@@ -2328,6 +2341,7 @@ export class Scene3D {
   /** Fondo del menú: paneo lento a baja altura por la grilla y el mangrullo. */
   renderMenu(cars: Car[], t: number, dt: number) {
     this.time += dt
+    this.flagman?.update(this.time, dt, false)
     for (const c of cars) {
       const v = this.views.get(c.id)!
       v.group.position.set(c.x, c.height, c.y)
@@ -2365,6 +2379,7 @@ export class Scene3D {
   /** Cámara de la previa, llamada por el bucle principal mientras dura. */
   renderIntro(cars: Car[], player: Car, t: number, total: number, dt: number) {
     this.time += dt
+    this.flagman?.update(this.time, dt, false)
     for (const c of cars) {
       const v = this.views.get(c.id)!
       v.group.position.set(c.x, c.height, c.y)
@@ -2395,8 +2410,9 @@ export class Scene3D {
     this.composer.render()
   }
 
-  update(cars: Car[], player: Car, dt: number) {
+  update(cars: Car[], player: Car, dt: number, finishT = -1) {
     this.time += dt
+    this.flagman?.update(this.time, dt, this.finishFlag)
     // Humo de los asados: sube, se abre y se desvanece en ciclo.
     for (const sp of this.smoke) {
       const a = ((this.time * 0.18 + (sp.userData.phase as number)) % 1)
@@ -2432,7 +2448,22 @@ export class Scene3D {
     let desired: THREE.Vector3
     let look: THREE.Vector3
     const hy = player.height
-    if (this.cameraMode === 'far') {
+    if (finishT >= 0) {
+      // Final de carrera: cámara de TV al costado de la llegada que sigue al
+      // auto, y después una vuelta lenta alrededor del auto en el giro de honor.
+      const s0 = this.track.points[0]
+      const out = this.track.outwardAt()
+      const half = this.track.width / 2
+      if (finishT < 4.5) {
+        desired = new THREE.Vector3(s0.x - Math.sin(s0.heading) * (half + 7) * out + Math.cos(s0.heading) * 10, 2.4, s0.y + Math.cos(s0.heading) * (half + 7) * out + Math.sin(s0.heading) * 10)
+        look = new THREE.Vector3(player.x, hy + 0.7, player.y)
+      } else {
+        const a = 0.8 + (finishT - 4.5) * 0.45
+        const r = 6.5 + Math.sin(finishT * 0.7) * 0.8
+        desired = new THREE.Vector3(player.x + Math.cos(a) * r, hy + 1.4 + Math.sin(finishT * 0.5) * 0.5, player.y + Math.sin(a) * r)
+        look = new THREE.Vector3(player.x, hy + 0.6, player.y)
+      }
+    } else if (this.cameraMode === 'far') {
       desired = new THREE.Vector3(player.x - fx * 16, hy + 9, player.y - fz * 16)
       look = new THREE.Vector3(player.x + fx * 8, hy + 0.5, player.y + fz * 8)
     } else if (this.cameraMode === 'hood') {
@@ -2448,15 +2479,15 @@ export class Scene3D {
       this.camTarget.copy(look)
       this.first = false
     } else {
-      const k = this.cameraMode === 'hood' ? 1 : 1 - Math.exp(-dt * 6)
+      const k = this.cameraMode === 'hood' && finishT < 0 ? 1 : 1 - Math.exp(-dt * (finishT >= 0 ? 3 : 6))
       this.camPos.lerp(desired, k)
       this.camTarget.lerp(look, 1 - Math.exp(-dt * 10))
     }
-    const shake = (player.onAsphalt ? 0.004 : 0.02) * Math.min(1, player.speed / 15)
+    const shake = (finishT >= 0 ? 0.002 : player.onAsphalt ? 0.004 : 0.02) * Math.min(1, player.speed / 15)
     this.camera.position.copy(this.camPos)
     this.camera.position.y += (Math.random() - 0.5) * shake
     this.camera.lookAt(this.camTarget)
-    const targetFov = (this.cameraMode === 'hood' ? 70 : 62) + Math.min(14, player.speed * 0.3)
+    const targetFov = finishT >= 0 ? (finishT < 4.5 ? 40 : 52) : (this.cameraMode === 'hood' ? 70 : 62) + Math.min(14, player.speed * 0.3)
     this.camera.fov += (targetFov - this.camera.fov) * Math.min(1, dt * 3)
     this.camera.updateProjectionMatrix()
 
@@ -2496,6 +2527,8 @@ export class Scene3D {
       threats.push({ x: c.x, z: c.y, px: c.x + vx * 1.3, pz: c.y + vz * 1.3, ux: vx / sp, uz: vz / sp, r: 13 + c.speed * 0.45 })
     }
     let fleeing = 0
+    const player = cars.find((c) => c.isPlayer) ?? cars[0]
+    const celebrateNear = (s: Person) => Math.hypot(s.x - player.x, s.z - player.y) < 80
     for (let i = 0; i < this.people.length; i++) {
       const s = this.people[i]
       if (s.fixed) continue
@@ -2553,6 +2586,10 @@ export class Scene3D {
       }
       switch (s.mode) {
         case 'idle':
+          if (this.celebrate && s.pose !== 'cheer' && celebrateNear(s)) {
+            s.pose = 'cheer'
+            s.wave = 0.7 + ((i * 7) % 5) * 0.08
+          }
           if (s.pose === 'cheer') {
             s.dirty = true
           }

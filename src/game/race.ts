@@ -131,6 +131,23 @@ export class Race {
     this.farOffTimer = 0
   }
 
+  /** Momento en que el jugador cruzó la meta (-1 si todavía no). */
+  finishedAt = -1
+  /** Momento en que llegó el primer auto (-1 si todavía no). */
+  firstFinishAt = -1
+
+  /** Segundos desde que el jugador cruzó la meta (-1 si todavía corre). */
+  get finishElapsed(): number {
+    return this.finishedAt < 0 ? -1 : this.time - this.finishedAt
+  }
+
+  /** El banderillero agita la bandera a cuadros mientras van llegando los autos. */
+  get flagWaving(): boolean {
+    if (this.firstFinishAt < 0) return false
+    const allDone = this.cars.every((c) => c.finished)
+    return !allDone || this.time - this.firstFinishAt < 45
+  }
+
   /** Segundos que lleva el jugador lejos de la pista (0 si está cerca). */
   farOffTimer = 0
   /** Cuántos segundos afuera antes de volver solo a la pista. */
@@ -277,7 +294,8 @@ export class Race {
     for (const c of this.cars) {
       let controls: Controls
       if (c.finished) {
-        controls = { throttle: 0.25, brake: 0, steer: aiControls(c, this.track, this.cars, 0).steer }
+        // Giro de honor: despacio, saludando.
+        controls = { throttle: c.speed > 12 ? 0 : 0.12, brake: 0, steer: aiControls(c, this.track, this.cars, 0).steer }
       } else if (c.isPlayer) {
         controls = playerControls
       } else {
@@ -294,8 +312,10 @@ export class Race {
     this.updateDisplayOrder()
     this.updateFarOff(dt)
 
+    if (this.results.length > 0 && this.firstFinishAt < 0) this.firstFinishAt = this.time
     if (this.player.finished && this.phase === 'racing') {
       this.phase = 'finished'
+      this.finishedAt = this.time
     }
   }
 }

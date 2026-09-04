@@ -8,6 +8,8 @@ import { Scene3D, imageSrc, type CameraMode } from './game/scene3d'
 import { TRACK_LENGTH_M } from './game/track'
 
 const CAMERA_MODES: CameraMode[] = ['chase', 'far', 'hood']
+/** Duración de la secuencia de llegada (bandera, cámara lenta y giro de honor) antes de los resultados. */
+const FINISH_SECONDS = 14
 
 function formatTime(t: number): string {
   if (!isFinite(t)) return '--:--.---'
@@ -27,6 +29,7 @@ interface HudState {
   phase: string
   offTrack: boolean
   returnIn: number
+  finishT: number
   tower: TowerRow[]
   time: number
   introTotal: number
@@ -126,6 +129,8 @@ export default function App() {
   const raceRef = useRef<Race | null>(null)
   const inputRef = useRef(new InputManager())
   const musicRef = useRef<TrackPlayer | null>(null)
+  // "Velocidad Pura": suena bajo durante la previa y a pleno en el final.
+  const raceMusicRef = useRef<TrackPlayer | null>(null)
   const skipRef = useRef<() => void>(() => {})
   const [musicOn, setMusicOn] = useState(false)
 
@@ -134,7 +139,10 @@ export default function App() {
     inMenuRef.current = screen === 'menu'
     if (screen !== 'menu') return
     if (!musicRef.current) musicRef.current = new TrackPlayer(audioSrc('menu'), true)
+    if (!raceMusicRef.current) raceMusicRef.current = new TrackPlayer(audioSrc('velocidad'), false)
     const music = musicRef.current
+    // Al volver al menú se apaga la música de la carrera.
+    raceMusicRef.current.fadeTo(0, 1.5, true)
     let done = false
     const tryPlay = () => {
       if (done) return
@@ -142,8 +150,9 @@ export default function App() {
         if (ok) {
           done = true
           setMusicOn(true)
-          // Si el clic que arrancó la música fue "Largar", queda baja para la previa.
-          music.fadeTo(inMenuRef.current ? 0.7 : 0.18, 1)
+          // Si el clic que arrancó la música fue "Largar", no corresponde: se apaga.
+          if (inMenuRef.current) music.fadeTo(0.7, 1)
+          else music.fadeTo(0, 0.5, true)
         }
       })
     }
@@ -195,8 +204,14 @@ export default function App() {
     setResults([])
     inMenuRef.current = false
     setScreen('race')
-    // La música baja durante la previa (relato) y se apaga al largar.
-    musicRef.current?.fadeTo(0.18, 2)
+    // La música del menú se apaga; "Velocidad Pura" acompaña bajita la previa
+    // (el relato va encima) y se corta al largar.
+    musicRef.current?.fadeTo(0, 1.5, true)
+    const rm = raceMusicRef.current
+    if (rm) {
+      rm.stop()
+      void rm.play(0.18)
+    }
   }, [laps, difficulty])
 
   useEffect(() => {
@@ -215,13 +230,20 @@ export default function App() {
     audio.start()
     // Gancho para pruebas automatizadas (capturas con Playwright): permite
     // teletransportar autos, cambiar la cámara y leer el estado del audio.
-    ;(window as unknown as { __sport4?: unknown }).__sport4 = { race, scene, audio }
+    ;(window as unknown as { __sport4?: unknown }).__sport4 = { race, scene, audio, music: musicRef.current, raceMusic: raceMusicRef.current }
     const relato = new TrackPlayer(audioSrc('relato'), false)
     void relato.play(1)
     // Audio de la largada: continúa el relato y canta la cuenta "tres, dos, uno, ¡largaron!".
     const largada = new TrackPlayer(audioSrc('largada'), false)
     let musicMuted = false
     let largadaStarted = false
+    let finishStarted = false
+    let finishSkip = false
+    const onFinishSkip = () => {
+      if (race.finishElapsed > 2.5) finishSkip = true
+    }
+    window.addEventListener('pointerdown', onFinishSkip)
+    window.addEventListener('keydown', onFinishSkip)
     const skipIntro = () => {
       race.skipIntro()
       relato.fadeTo(0, 0.8, true)
@@ -272,9 +294,12 @@ export default function App() {
         race.setIntroTime(Math.max(0, (now - introStart) / 1000))
         acc = 0
       }
-      while (acc >= FIXED) {
+      // Al cruzar la meta, cámara lenta por unos segundos.
+      const finNow = race.finishElapsed
+      const slow = finNow >= 0 && finNow < 3.2 ? 0.35 : 1
+      while (acc >= FIXED / slow) {
         race.step(FIXED, controls)
-        acc -= FIXED
+        acc -= FIXED / slow
       }
       if (race.phase === 'intro' && race.time >= race.introDuration) skipIntro()
 
@@ -284,7 +309,7 @@ export default function App() {
       } else {
         if (!musicMuted) {
           musicMuted = true
-          musicRef.current?.fadeTo(0, 1.5, true)
+          raceMusicRef.current?.fadeTo(0, 1.5, true)
           relato.fadeTo(0, 0.6, true)
         }
         if (!largadaStarted) {
@@ -292,9 +317,20 @@ export default function App() {
           largadaStarted = true
           void largada.play(1)
         }
-        scene.update(race.cars, p, dt)
+        const fin = race.finishElapsed
+        if (fin >= 0 && !finishStarted) {
+          finishStarted = true
+          scene.celebrate = true
+          const rm = raceMusicRef.current
+          if (rm) {
+            rm.stop()
+            void rm.play(0.55)
+          }
+        }
+        scene.finishFlag = race.flagWaving
+        scene.update(race.cars, p, dt, fin)
       }
-      audio.update(race.cars, p, controls, race.phase, dt)
+      audio.update(race.cars, p, race.phase === 'finished' ? { throttle: 0.2, brake: 0, steer: 0 } : controls, race.phase, dt)
 
       const dpr = Math.min(window.devicePixelRatio || 1, 2)
       mmCtx.setTransform(dpr, 0, 0, dpr, 0, 0)
@@ -316,13 +352,14 @@ export default function App() {
           phase: race.phase,
           offTrack: !p.onAsphalt,
           returnIn: race.returnCountdown,
+          finishT: race.finishElapsed,
           tower: race.tower(),
           time: race.time,
           introTotal: race.introDuration,
         })
       }
 
-      if (race.phase === 'finished') {
+      if (race.phase === 'finished' && (race.finishElapsed > FINISH_SECONDS || finishSkip)) {
         const st = race.standings()
         const winnerTime = st[0].finishTime
         setResults(
@@ -347,6 +384,8 @@ export default function App() {
       cancelAnimationFrame(raf)
       window.removeEventListener('resize', resize)
       window.removeEventListener('keydown', onSkipKey)
+      window.removeEventListener('pointerdown', onFinishSkip)
+      window.removeEventListener('keydown', onFinishSkip)
       input.detach()
       audio.stop()
       relato.dispose()
@@ -458,7 +497,7 @@ export default function App() {
   }
 
   return (
-    <div className="game">
+    <div className={`game${hud && hud.phase === 'finished' && hud.finishT >= 0 ? ' finishing' : ''}`}>
       <canvas ref={canvasRef} />
       <canvas ref={minimapRef} className="minimap" hidden={hud?.phase === 'intro'} />
       {hud && hud.phase === 'intro' && <IntroOverlay t={hud.time} total={hud.introTotal} onSkip={() => skipRef.current()} />}
@@ -509,6 +548,14 @@ export default function App() {
           </div>
           {hud.phase === 'countdown' && (
             <div className="countdown">{hud.countdown}</div>
+          )}
+          {hud.phase === 'finished' && hud.finishT >= 0 && (
+            <div className={`finish ${hud.finishT > 1.2 ? 'show' : ''}`}>
+              <div className="flag-strip" />
+              <div className="finish-title">¡Bandera a cuadros!</div>
+              <div className="finish-pos">{hud.position === 1 ? '¡Ganaste!' : `${hud.position}° puesto`}</div>
+              {hud.finishT > 4 && <div className="finish-hint">Tocá para ver los resultados</div>}
+            </div>
           )}
           {hud.phase === 'racing' && hud.lapTime < 1.5 && hud.lap === 1 && <div className="countdown go">¡Largaron!</div>}
         </>

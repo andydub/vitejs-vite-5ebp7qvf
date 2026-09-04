@@ -17,7 +17,7 @@ for name, mime in [('lucio.jpg', 'image/jpeg'), ('logo-alvear.png', 'image/png')
     f = 'public/img/' + name
     if os.path.exists(f):
         imgs.append(f'"{name}":"data:{mime};base64,{b(f)}"')
-audio = ','.join(f'{k}:"data:audio/mpeg;base64,{b("public/audio/" + k + ".mp3")}"' for k in ['menu', 'relato', 'largada'])
+audio = ','.join(f'{k}:"data:audio/mpeg;base64,{b("public/audio/" + k + ".mp3")}"' for k in ['menu', 'relato', 'largada', 'velocidad'])
 # Loops del motor real (WAV cortos), con la misma clave que usa audioSrc().
 engine = sorted(glob.glob('public/audio/engine/*.wav'))
 audio += ''.join(f',"engine/{os.path.basename(f)}":"data:audio/wav;base64,{b(f)}"' for f in engine)

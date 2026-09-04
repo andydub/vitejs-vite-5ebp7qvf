@@ -948,3 +948,69 @@
 .menu-card label + label {
   margin-top: -8px;
 }
+
+/* Placa de llegada: bandera a cuadros y puesto, estilo TV. */
+.finish {
+  position: absolute;
+  top: 22%;
+  left: 0;
+  right: 0;
+  text-align: center;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
+.finish.show {
+  opacity: 1;
+  transform: none;
+}
+.finish .flag-strip {
+  width: min(70vw, 520px);
+  height: 18px;
+  margin: 0 auto 10px;
+  background: repeating-conic-gradient(#111 0 25%, #f4f4f4 0 50%) 0 0 / 36px 36px;
+  transform: skewX(-12deg);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+.finish-title {
+  font-family: var(--tv-font);
+  font-size: clamp(34px, 6vw, 64px);
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: #fff;
+  text-shadow: 0 4px 16px rgba(0, 0, 0, 0.7);
+}
+.finish-pos {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 6px 28px;
+  font-family: var(--tv-font);
+  font-size: clamp(28px, 5vw, 52px);
+  font-weight: 800;
+  color: #fff;
+  background: var(--tv-red);
+  transform: skewX(-12deg);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+}
+.finish-hint {
+  margin-top: 18px;
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.85);
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.7);
+}
+
+/* Durante la llegada se limpia la pantalla: sólo la placa y la imagen. */
+.game.finishing .tv-tower,
+.game.finishing .tv-times,
+.game.finishing .hud.speed,
+.game.finishing .minimap,
+.game.finishing .touch,
+.game.finishing .race-buttons {
+  opacity: 0;
+  transition: opacity 0.8s ease;
+}
+.finish {
+  top: 9%;
+}

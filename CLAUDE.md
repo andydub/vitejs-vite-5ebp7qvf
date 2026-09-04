@@ -39,8 +39,17 @@ git add -A && git commit && git push -u origin claude/racing-game-alvear-nzrosq
 - Previa de 59 s con el relato de Lucio Aguirre (`public/audio/relato.mp3`),
   cámara con reloj real; al terminar suena `largada.mp3` y la cuenta 3-2-1
   sigue `COUNTDOWN_CUES` (largan a los 3,15 s del audio).
-- Música del menú `menu.mp3`: sube con el primer clic, baja a 0,18 al tocar
-  Largar y se corta al largar.
+- Músicas: `menu.mp3` es el tema del menú (el segundo que mandó el usuario);
+  `velocidad.mp3` ("Velocidad Pura") va a 0,18 en la previa, se corta al
+  largar y vuelve a 0,55 al cruzar la meta y en resultados. Los originales
+  no están en el repo: se reconvirtieron con `soundfile` (32 kHz, VBR) para
+  que el bundle entre en 16 MB; pedirlos si hay que regenerar.
+- Final de carrera: `race.finishElapsed` dispara la secuencia en App.tsx
+  (`FINISH_SECONDS` = 14 s, cámara lenta 3,2 s, placa `.finish`, HUD oculto
+  con `.game.finishing`), la cámara la maneja `scene.update(..., finishT)`,
+  `scene.celebrate` hace alentar al público a menos de 80 m y
+  `scene.finishFlag` (de `race.flagWaving`) agita la bandera del
+  banderillero (`Flagman`, crowd.ts), parado del lado exterior de la meta.
 - Gráfica estilo ESPN (Barlow Condensed, paneles rojos/negros inclinados),
   torre de tiempos estilo F1 con histéresis de 2 s y refresco 1 Hz.
 - Dificultad Fácil (por defecto) / Normal; rivales con ritmo variable
