@@ -26,6 +26,7 @@ interface HudState {
   countdown: string
   phase: string
   offTrack: boolean
+  returnIn: number
   tower: TowerRow[]
   time: number
   introTotal: number
@@ -314,6 +315,7 @@ export default function App() {
           countdown: race.countdownLabel(),
           phase: race.phase,
           offTrack: !p.onAsphalt,
+          returnIn: race.returnCountdown,
           tower: race.tower(),
           time: race.time,
           introTotal: race.introDuration,
@@ -503,7 +505,7 @@ export default function App() {
           <div className="hud speed">
             <b>{Math.round(hud.speed)}</b>
             <small>km/h</small>
-            {hud.offTrack && <div className="warn">¡Afuera!</div>}
+            {hud.returnIn > 0 ? <div className="warn">¡Volvé a pista! {Math.ceil(hud.returnIn)}</div> : hud.offTrack && <div className="warn">¡Afuera!</div>}
           </div>
           {hud.phase === 'countdown' && (
             <div className="countdown">{hud.countdown}</div>

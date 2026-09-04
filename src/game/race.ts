@@ -128,6 +128,42 @@ export class Race {
 
   resetPlayer() {
     if (this.phase === 'racing') this.player.resetToTrack(this.track)
+    this.farOffTimer = 0
+  }
+
+  /** Segundos que lleva el jugador lejos de la pista (0 si está cerca). */
+  farOffTimer = 0
+  /** Cuántos segundos afuera antes de volver solo a la pista. */
+  static readonly FAR_OFF_SECONDS = 2.5
+  /** Metros más allá del borde a partir de los cuales se considera "lejos" (pasando las cubiertas). */
+  static readonly FAR_OFF_METERS = 8.5
+
+  /** Cuenta regresiva para el retorno automático (0 si no corresponde). */
+  get returnCountdown(): number {
+    return this.farOffTimer > 0 ? Math.max(0, Race.FAR_OFF_SECONDS - this.farOffTimer) : 0
+  }
+
+  /**
+   * Anti-atajo: si el jugador se aleja de la pista más de lo que dan las
+   * cubiertas y el alambrado durante un rato (cortando camino o clavado
+   * contra el terraplén), vuelve solo a la pista como con la tecla R.
+   */
+  private updateFarOff(dt: number) {
+    if (this.phase !== 'racing') {
+      this.farOffTimer = 0
+      return
+    }
+    const p = this.player
+    const d = Math.abs(this.track.lateralOffset(p.x, p.y, p.trackIndex)) - this.track.width / 2
+    if (d > Race.FAR_OFF_METERS) {
+      this.farOffTimer += dt
+      if (this.farOffTimer >= Race.FAR_OFF_SECONDS) {
+        p.resetToTrack(this.track)
+        this.farOffTimer = 0
+      }
+    } else {
+      this.farOffTimer = 0
+    }
   }
 
   /** Reloj de la previa: sigue el tiempo real (y el audio del relato), no el paso fijo. */
@@ -256,6 +292,7 @@ export class Race {
     }
     resolveCollisions(this.cars)
     this.updateDisplayOrder()
+    this.updateFarOff(dt)
 
     if (this.player.finished && this.phase === 'racing') {
       this.phase = 'finished'

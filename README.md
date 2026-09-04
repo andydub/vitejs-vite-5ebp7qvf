@@ -26,6 +26,10 @@ Abrir la URL que muestra Vite (por defecto http://localhost:5173).
 | Frenar            | ↓, S o Espacio          | botón FRENO         |
 | Doblar            | ← → o A D               | botones ◀ ▶         |
 | Volver a la pista | R                       | botón "A pista"     |
+
+Si el auto se aleja más de 8,5 m del borde durante 2,5 s (cortando camino o
+clavado contra el terraplén), vuelve solo a la pista, con aviso y cuenta en
+el HUD (`updateFarOff` en `src/game/race.ts`).
 | Cambiar cámara    | C (persecución / lejana / capot) | botón "Cámara" |
 
 ## Estructura
@@ -41,10 +45,11 @@ Abrir la URL que muestra Vite (por defecto http://localhost:5173).
   deshilachado sobre las bermas, piedras, pasto seco, carteles de frenaje,
   cubiertas, alambrado, terraplén, torre, álamos, cordillera, autos, polvo,
   cámaras).
-- `src/game/crowd.ts`: público. Figuras humanas instanciadas (piernas, torso,
-  brazos con antebrazo, cabeza con cara, pelo o gorra) con posturas variadas;
-  caminan por el terraplén y salen corriendo si un auto se va contra ellos
-  (`updateCrowd` en `scene3d.ts`).
+- `src/game/crowd.ts`: público. Figuras humanas instanciadas con siluetas
+  torneadas, ropa con textura (remera, camiseta a rayas, campera), caras con
+  ojos y boca, barba o anteojos de sol, pelo corto o largo, gorra o sombrero,
+  mate con termo y celular; posturas variadas, caminan por el terraplén y
+  salen corriendo si un auto se va contra ellos (`updateCrowd` en `scene3d.ts`).
 - `src/game/audio.ts`: audio con Web Audio. El motor del jugador mezcla
   loops del motor real (`public/audio/engine/`, cortados de un onboard con
   `scripts/engine_loops.py`) según las rpm de una caja de 5 marchas simulada,

@@ -60,8 +60,12 @@ git add -A && git commit && git push -u origin claude/racing-game-alvear-nzrosq
   embebe los WAV con clave `engine/<archivo>` en `__SPORT4_AUDIO`.
   Para probar sin escuchar: `window.__sport4.audio` expone `rpm`, `gear`,
   `ready` y `level` (RMS de salida).
-- Público en `src/game/crowd.ts` (figuras con cápsulas, piel/pelo/gorra,
-  posturas). La huida ante un auto que se sale está en `updateCrowd`
+- Anti-atajo: `updateFarOff` en race.ts devuelve al jugador a la pista si
+  pasa `FAR_OFF_SECONDS` (2,5 s) a más de `FAR_OFF_METERS` (8,5 m) del borde;
+  el HUD muestra "¡Volvé a pista! N".
+- Público en `src/game/crowd.ts` (siluetas torneadas, texturas de ropa y
+  cara en blanco y grises teñidas por el color de instancia, variantes por
+  InstancedMesh: 3 remeras, 3 caras, gorra/sombrero, mate/termo/celular). La huida ante un auto que se sale está en `updateCrowd`
   (scene3d.ts): huyen hacia los costados de la trayectoria, esperan y
   vuelven caminando. Los de arriba del camión son `fixed`.
 

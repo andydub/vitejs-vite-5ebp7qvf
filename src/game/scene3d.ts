@@ -1835,12 +1835,13 @@ export class Scene3D {
     this.scene.add(crowd.group)
     const shirtPalette = [0xffffff, 0x1f2a44, 0x8c1d1d, 0x2a7f3a, 0xf2c94c, 0x222222, 0x5b8fd6, 0x74acdf, 0xd42020, 0xe8e2cf, 0x6a4a8a, 0xf28c28]
     const pantsPalette = [0x2a3a66, 0x111111, 0x8a7a5a, 0x3a3a3a, 0x5a6a8a, 0x1d2b4f, 0x6e5a44]
-    const capPalette = [0x111111, 0xd42020, 0xffffff, 0x1f5fd6, 0x2a7f3a, 0xf2c94c]
+    const capPalette = [0x111111, 0xd42020, 0xffffff, 0x1f5fd6, 0x2a7f3a, 0xf2c94c, 0xc9b58a, 0x6b4f2a]
     this.people = people.map((pp, i) => {
       const kid = !pp.fixed && rnd() < 0.1
       const h = kid ? 0.55 + rnd() * 0.15 : 0.92 + rnd() * 0.22
       const r = rnd()
-      const pose: Pose = pp.walk ? 'down' : r < 0.42 ? 'down' : r < 0.62 ? 'crossed' : r < 0.78 ? 'hips' : r < 0.9 ? 'phone' : 'cheer'
+      const pose: Pose = pp.walk ? 'down' : r < 0.3 ? 'down' : r < 0.48 ? 'crossed' : r < 0.62 ? 'hips' : r < 0.74 ? 'phone' : r < 0.9 ? 'mate' : 'cheer'
+      const hasHat = rnd() < 0.5
       const person: Person = {
         hx: pp.x,
         hz: pp.y,
@@ -1853,11 +1854,14 @@ export class Scene3D {
         h,
         build: kid ? 0.8 : 0.85 + rnd() * 0.35,
         shirt: rnd() < 0.7 ? pp.color : shirtPalette[Math.floor(rnd() * shirtPalette.length)],
+        shirtStyle: rnd() < 0.55 ? 0 : rnd() < 0.5 ? 1 : 2,
         pants: pantsPalette[Math.floor(rnd() * pantsPalette.length)],
         skin: SKIN_TONES[Math.floor(rnd() * SKIN_TONES.length)],
         hair: HAIR_COLORS[Math.floor(rnd() * HAIR_COLORS.length)],
         hairLong: rnd() < 0.3,
-        cap: rnd() < 0.45 ? capPalette[Math.floor(rnd() * capPalette.length)] : -1,
+        headStyle: kid ? 0 : rnd() < 0.6 ? 0 : rnd() < 0.5 ? 1 : 2,
+        hat: hasHat ? (rnd() < 0.75 ? 1 : 2) : 0,
+        cap: hasHat ? capPalette[Math.floor(rnd() * capPalette.length)] : 0x333333,
         sleeves: rnd() < 0.35,
         pose,
         fixed: !!pp.fixed,
