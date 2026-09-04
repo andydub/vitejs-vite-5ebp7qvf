@@ -192,6 +192,7 @@ export class EngineAudio {
   private loaded = false
   private disposed = false
   private analyser: AnalyserNode | null = null
+  private unwake: (() => void) | null = null
 
   /** Nivel RMS de la salida (0..1), para pruebas automatizadas. */
   get level(): number {
@@ -302,6 +303,16 @@ export class EngineAudio {
       this.clunkBuf = this.burst(0.03, 0.2)
 
       void ctx.resume()
+      // Si el navegador lo dejó suspendido, se reanuda con el primer toque o tecla.
+      const wake = () => {
+        if (this.ctx && this.ctx.state !== 'running') void this.ctx.resume()
+      }
+      window.addEventListener('pointerdown', wake)
+      window.addEventListener('keydown', wake)
+      this.unwake = () => {
+        window.removeEventListener('pointerdown', wake)
+        window.removeEventListener('keydown', wake)
+      }
       void this.loadLoops()
     } catch {
       this.ctx = null
@@ -329,11 +340,22 @@ export class EngineAudio {
     await Promise.all(
       ENGINE_LOOPS.map(async (l) => {
         try {
-          const res = await fetch(audioSrc(`engine/${l.file}`))
-          const buffer = await ctx.decodeAudioData(await res.arrayBuffer())
+          const src = audioSrc(`engine/${l.file}`)
+          let data: ArrayBuffer
+          if (src.startsWith('data:')) {
+            // Embebido en la página: se decodifica a mano. En el Artifact la
+            // política de seguridad no deja hacer fetch de URLs data:.
+            const bin = atob(src.slice(src.indexOf(',') + 1))
+            const bytes = new Uint8Array(bin.length)
+            for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+            data = bytes.buffer
+          } else {
+            data = await (await fetch(src)).arrayBuffer()
+          }
+          const buffer = await ctx.decodeAudioData(data)
           loops.push({ hz: l.hz, throttle: l.throttle, buffer })
-        } catch {
-          /* loop faltante: se sigue con los demás */
+        } catch (err) {
+          console.warn('No se pudo cargar el loop de motor', l.file, err)
         }
       }),
     )
@@ -365,7 +387,7 @@ export class EngineAudio {
    */
   update(cars: Car[], player: Car, controls: Controls, phase: string, dt: number) {
     const ctx = this.ctx
-    if (!ctx || !this.loaded || !this.bank) return
+    if (!ctx) return
     this.time += dt
     const t = ctx.currentTime
     const racing = phase === 'racing' || phase === 'finished'
@@ -431,7 +453,7 @@ export class EngineAudio {
     this.throttleMix += (wantMix - this.throttleMix) * Math.min(1, dt * (wantMix > this.throttleMix ? 14 : 8))
     const hz = this.rpm / 30
     const loudness = (0.55 + 0.45 * this.throttleMix) * (this.shiftTimer > 0 ? 0.55 : 1) * cut
-    this.bank.set(hz, this.throttleMix, loudness, t)
+    this.bank?.set(hz, this.throttleMix, loudness, t)
     this.engineGain.gain.setTargetAtTime(racing || phase === 'countdown' ? 0.55 : 0.32, t, 0.3)
     // Más distorsión a fondo y en vueltas altas.
     const driveIdx = Math.round(this.throttleMix * 2 + (this.rpm > 6500 ? 1 : 0))
@@ -529,6 +551,7 @@ export class EngineAudio {
 
   stop() {
     this.disposed = true
+    this.unwake?.()
     try {
       this.bank?.stop()
       for (const v of this.rivals) v.bank.stop()
