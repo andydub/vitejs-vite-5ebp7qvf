@@ -220,6 +220,7 @@ export class EngineAudio {
   private blipTimer = 0
   private blipRpm = RPM_IDLE
   private time = 0
+  private racingTime = 0
 
   start() {
     try {
@@ -228,7 +229,7 @@ export class EngineAudio {
       const ctx = new Ctx()
       this.ctx = ctx
       this.master = ctx.createGain()
-      this.master.gain.value = 0.9
+      this.master.gain.value = 0.75
       const comp = ctx.createDynamicsCompressor()
       comp.threshold.value = -14
       comp.knee.value = 12
@@ -454,7 +455,12 @@ export class EngineAudio {
     const hz = this.rpm / 30
     const loudness = (0.55 + 0.45 * this.throttleMix) * (this.shiftTimer > 0 ? 0.55 : 1) * cut
     this.bank?.set(hz, this.throttleMix, loudness, t)
-    this.engineGain.gain.setTargetAtTime(racing || phase === 'countdown' ? 0.55 : 0.32, t, 0.3)
+    // Nivel general del motor: de fondo mientras habla el relator (previa y
+    // cuenta regresiva), y sube del todo unos segundos después de largar.
+    if (racing) this.racingTime += dt
+    else this.racingTime = 0
+    const engineLevel = racing ? 0.2 + 0.18 * Math.min(1, Math.max(0, (this.racingTime - 3) / 5)) : phase === 'countdown' ? 0.2 : 0.1
+    this.engineGain.gain.setTargetAtTime(engineLevel, t, 0.5)
     // Más distorsión a fondo y en vueltas altas.
     const driveIdx = Math.round(this.throttleMix * 2 + (this.rpm > 6500 ? 1 : 0))
     if (driveIdx !== this.lastDrive) {
@@ -476,7 +482,7 @@ export class EngineAudio {
     // --- Capas del piso ---
     const k = Math.min(1, speed / 30)
     const offRoad = player.onAsphalt ? 0 : 1
-    this.dirtGain.gain.setTargetAtTime((0.06 + offRoad * 0.16) * k, t, 0.08)
+    this.dirtGain.gain.setTargetAtTime((0.045 + offRoad * 0.12) * k, t, 0.08)
     this.dirtFilter.frequency.setTargetAtTime(500 + k * 1200 + offRoad * 400, t, 0.1)
     const slide = Math.min(1, Math.max(0, (Math.abs(player.lateralSpeed) - 1.2) / 5))
     const braking = controls.brake > 0.5 && speed > 8 ? 0.35 : 0
@@ -532,7 +538,7 @@ export class EngineAudio {
         const accel = (r.c.speed - v.lastSpeed) / Math.max(dt, 1e-3)
         v.lastSpeed = r.c.speed
         const onThrottle = accel > -1.5 ? 1 : 0.55
-        const g = r.c.speed > 0.5 ? 0.9 / (1 + (d / 9) ** 2) : 0
+        const g = r.c.speed > 0.5 ? 0.6 / (1 + (d / 9) ** 2) : 0
         const rpm = Math.max(RPM_IDLE, Math.min(RPM_LIMIT, rpmAt(r.c.speed, autoGear(r.c.speed))))
         v.bank.set((rpm / 30) * doppler, 1, onThrottle, t, 0.05)
         v.gain.gain.setTargetAtTime(g, t, 0.08)
