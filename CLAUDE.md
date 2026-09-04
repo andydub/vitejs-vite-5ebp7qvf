@@ -80,6 +80,10 @@ git add -A && git commit && git push -u origin claude/racing-game-alvear-nzrosq
   teletransportar al jugador (`race.player.x/y/heading/speed`), cambiar
   `scene.cameraMode` y leer `scene.fleeingCount`. El cartel "¡Largaron!"
   tapa la pantalla hasta ~5 s después de `race.player.lapStartTime`.
+- En el Artifact publicado no funciona `fetch` sobre URLs `data:` (política
+  de seguridad): los assets embebidos en `__SPORT4_*` se decodifican del
+  base64 a mano (ver `loadLoops` en audio.ts). Para reproducirlo en pruebas,
+  anular `window.fetch` con `page.addInitScript`.
 - El ffmpeg de Playwright no decodifica mp3: usar `soundfile` (pip) para
   análisis de audio. YouTube está bloqueado por la red: pedir el archivo.
 - Las imágenes pegadas en el chat no llegan como archivo: pedir que las suba
