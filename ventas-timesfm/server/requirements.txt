@@ -1,0 +1,6 @@
+fastapi>=0.110
+uvicorn[standard]>=0.29
+numpy>=1.26
+# Motor TimesFM 2.5 (opcional: sin él se usa el baseline estacional).
+# En CPU conviene instalar antes torch desde https://download.pytorch.org/whl/cpu
+timesfm[torch]>=2.0
